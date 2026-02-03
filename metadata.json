@@ -1,0 +1,5 @@
+{
+  "name": "OSN_CBT SYSTEM",
+  "description": "A Computer Based Test application with multiple question types (PG, PGK, BS) and admin dashboard, designed for TKA assessments.",
+  "requestFramePermissions": []
+}
