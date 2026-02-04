@@ -38,11 +38,6 @@ const RankingTab = ({ students }: { students: any[] }) => {
         setLoading(true);
         api.getRecap().then(res => { 
             setData(res);
-            // Auto-select first subject if available and none selected
-            const subjects = Array.from(new Set(res.map((r: any) => r.mapel).filter(Boolean))).sort();
-            if (subjects.length > 0 && !filterSubject) {
-                setFilterSubject(subjects[0] as string);
-            }
         }).catch(console.error).finally(() => setLoading(false));
     }, []);
     
@@ -90,7 +85,7 @@ const RankingTab = ({ students }: { students: any[] }) => {
                             value={filterSubject} 
                             onChange={e => setFilterSubject(e.target.value)}
                         >
-                            {uniqueSubjects.length === 0 && <option value="">Belum ada data</option>}
+                            <option value="">Semua Mata Pelajaran</option>
                             {uniqueSubjects.map((s:any) => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>

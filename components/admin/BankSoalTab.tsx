@@ -158,6 +158,76 @@ const BankSoalTab = () => {
         reader.readAsBinaryString(file);
     };
 
+    // --- GENERIC IMAGE UPLOAD LOGIC ---
+    // Now accepts 'field' to target either the question image ('gambar') or options ('opsi_a', etc.)
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: keyof QuestionRow) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 2 * 1024 * 1024) { alert("Ukuran file terlalu besar. Maks 2MB"); return; }
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    // Resize to max 800px to keep base64 string reasonable for Apps Script
+                    const maxSize = 800; 
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > height) { if (width > maxSize) { height *= maxSize / width; width = maxSize; } } 
+                    else { if (height > maxSize) { width *= maxSize / height; height = maxSize; } }
+                    
+                    canvas.width = Math.floor(width); 
+                    canvas.height = Math.floor(height);
+                    
+                    if (ctx) { 
+                        ctx.fillStyle = "#FFFFFF"; 
+                        ctx.fillRect(0, 0, canvas.width, canvas.height); 
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8); 
+                        setCurrentQ(prev => prev ? ({ ...prev, [field]: dataUrl }) : null); 
+                    }
+                };
+                img.src = event.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Helper to check if string looks like an image
+    const isImage = (val: string) => val && (val.startsWith('data:image') || val.startsWith('http') || val.match(/\.(jpeg|jpg|gif|png)$/) != null);
+
+    const renderOptionInput = (label: string, field: 'opsi_a' | 'opsi_b' | 'opsi_c' | 'opsi_d') => {
+        if (!currentQ) return null;
+        return (
+            <div className="group">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">{label}</label>
+                <div className="flex gap-2">
+                    <div className="relative w-12 h-12 bg-slate-50 border-2 border-slate-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0">
+                         {isImage(currentQ[field]) ? (
+                            <img src={currentQ[field]} alt="Preview" className="w-full h-full object-cover" />
+                         ) : (
+                            <span className="text-[10px] text-slate-300 font-bold">Txt</span>
+                         )}
+                    </div>
+                    <input 
+                        type="text" 
+                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-xs" 
+                        value={currentQ[field]} 
+                        onChange={e => setCurrentQ({...currentQ, [field]: e.target.value})} 
+                        placeholder="Teks jawaban atau Link/Upload Gambar..." 
+                    />
+                    <label className="bg-white border-2 border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 p-3 rounded-xl cursor-pointer transition flex items-center justify-center active:scale-95" title="Upload Gambar Opsi">
+                        <Upload size={18}/>
+                        <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, field)} />
+                    </label>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-6 fade-in max-w-full mx-auto">
              {/* Header Control */}
@@ -269,10 +339,20 @@ const BankSoalTab = () => {
                                             <textarea required rows={5} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none resize-none transition-colors leading-relaxed" value={currentQ.text_soal} onChange={e => setCurrentQ({...currentQ, text_soal: e.target.value})} placeholder="Tuliskan pertanyaan disini..."></textarea>
                                         </div>
                                         <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Link Gambar (Opsional)</label>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Link Gambar / Upload</label>
                                             <div className="flex gap-2">
-                                                <div className="bg-slate-50 p-3 border-2 border-slate-100 rounded-xl flex items-center justify-center text-slate-400"><ImageIcon size={20}/></div>
-                                                <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.gambar} onChange={e => setCurrentQ({...currentQ, gambar: e.target.value})} placeholder="https://..." />
+                                                <div className="relative w-12 h-12 bg-slate-50 border-2 border-slate-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0">
+                                                    {isImage(currentQ.gambar) ? (
+                                                        <img src={currentQ.gambar} alt="Preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <ImageIcon size={20} className="text-slate-400"/>
+                                                    )}
+                                                </div>
+                                                <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-xs" value={currentQ.gambar} onChange={e => setCurrentQ({...currentQ, gambar: e.target.value})} placeholder="Paste URL atau Upload..." />
+                                                <label className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl cursor-pointer transition shadow-lg shadow-indigo-200 flex items-center justify-center">
+                                                    <Upload size={20}/>
+                                                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, 'gambar')} />
+                                                </label>
                                             </div>
                                         </div>
                                     </div>
@@ -290,23 +370,12 @@ const BankSoalTab = () => {
                                 <div className="space-y-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
                                     <h4 className="font-bold text-slate-700 border-b-2 border-slate-100 pb-3 mb-4 flex items-center gap-2"><CheckCircle2 size={18} className="text-slate-400"/> Pilihan Jawaban</h4>
                                     <div className="space-y-4">
-                                        <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Opsi A / Pernyataan 1</label>
-                                            <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.opsi_a} onChange={e => setCurrentQ({...currentQ, opsi_a: e.target.value})} />
-                                        </div>
-                                        <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Opsi B / Pernyataan 2</label>
-                                            <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.opsi_b} onChange={e => setCurrentQ({...currentQ, opsi_b: e.target.value})} />
-                                        </div>
-                                        <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Opsi C / Pernyataan 3</label>
-                                            <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.opsi_c} onChange={e => setCurrentQ({...currentQ, opsi_c: e.target.value})} />
-                                        </div>
+                                        {renderOptionInput("Opsi A / Pernyataan 1", 'opsi_a')}
+                                        {renderOptionInput("Opsi B / Pernyataan 2", 'opsi_b')}
+                                        {renderOptionInput("Opsi C / Pernyataan 3", 'opsi_c')}
+                                        
                                         {currentQ.tipe_soal !== 'PGK' && (
-                                            <div className="group">
-                                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Opsi D / Pernyataan 4</label>
-                                                <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.opsi_d} onChange={e => setCurrentQ({...currentQ, opsi_d: e.target.value})} />
-                                            </div>
+                                           renderOptionInput("Opsi D / Pernyataan 4", 'opsi_d')
                                         )}
                                     </div>
                                 </div>

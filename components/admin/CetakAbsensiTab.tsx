@@ -57,7 +57,7 @@ const CetakAbsensiTab = ({ currentUser, students }: { currentUser: User, student
         
         // UPDATED LOGOS
         const logoLeftUrl = "https://image2url.com/r2/default/images/1770096905658-b4833d12-b272-4a2b-957b-37734ea24417.jpg";
-        const logoRightUrl = "https://image2url.com/r2/default/images/1770098521721-69e5387f-3367-4aa7-98b9-bc791e341433.jpg";
+        const logoRightUrl = "https://image2url.com/r2/default/images/1770216884638-0a7493fe-7dc5-4bde-8900-68d7b163679a.png";
 
         const rowsHtml = filteredStudents.map((s, idx) => `
             <tr>

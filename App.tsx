@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, Exam, QuestionWithOptions } from './types';
-import { Key, User as UserIcon, Monitor, AlertCircle, LogOut, Check, Eye, EyeOff, Smartphone, Wifi, ArrowRight, Loader2, WifiOff, X, Clock, ShieldCheck, PlayCircle, Zap, GraduationCap, LogIn, Laptop } from 'lucide-react';
+import { Key, User as UserIcon, AlertCircle, LogOut, Check, Eye, EyeOff, Loader2, Clock, ShieldCheck, PlayCircle, GraduationCap, LogIn } from 'lucide-react';
 import StudentExam from './components/StudentExam';
 import AdminDashboard from './components/AdminDashboard';
 import { api } from './services/api';
 
-type ViewState = 'system_check' | 'login' | 'confirm' | 'exam' | 'result' | 'admin';
+type ViewState = 'login' | 'confirm' | 'exam' | 'result' | 'admin';
 
 // Modern Loading Overlay (Clean White & Red Design)
 const LoadingOverlay = ({ message }: { message: string }) => (
@@ -26,7 +26,8 @@ const LoadingOverlay = ({ message }: { message: string }) => (
 );
 
 function App() {
-  const [view, setView] = useState<ViewState>('system_check');
+  // Directly start at login
+  const [view, setView] = useState<ViewState>('login');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [examList, setExamList] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
@@ -41,8 +42,6 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   
-  const [sysInfo, setSysInfo] = useState({ os: 'Unknown', device: 'Unknown', browser: 'Unknown', platform: 'Unknown', ram: 'Unknown', status: 'Checking...' });
-
   // Restore Session
   useEffect(() => {
     const savedUser = localStorage.getItem('cbt_user');
@@ -100,125 +99,6 @@ function App() {
       window.addEventListener('keydown', handleGlobalKeyDown);
       return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (view === 'system_check') {
-        const getDetailedSystemInfo = async () => {
-            const userAgent = navigator.userAgent;
-            let os = "Unknown OS";
-            let device = "Unknown Device";
-            let browser = "Unknown Browser";
-            let platform = "Desktop"; // Default
-
-            // --- PLATFORM DETECTION ---
-            if (/Android/i.test(userAgent)) platform = "Android";
-            else if (/iPhone|iPad|iPod/i.test(userAgent)) platform = "iOS";
-
-            // --- BROWSER DETECTION ---
-            if (userAgent.indexOf("Firefox") > -1) browser = "Mozilla Firefox";
-            else if (userAgent.indexOf("SamsungBrowser") > -1) browser = "Samsung Internet";
-            else if (userAgent.indexOf("Opera") > -1 || userAgent.indexOf("OPR") > -1) browser = "Opera";
-            else if (userAgent.indexOf("Trident") > -1) browser = "Internet Explorer";
-            else if (userAgent.indexOf("Edge") > -1) browser = "Microsoft Edge";
-            else if (userAgent.indexOf("Chrome") > -1) browser = "Google Chrome";
-            else if (userAgent.indexOf("Safari") > -1) browser = "Apple Safari";
-
-            // --- OS DETECTION ---
-            if (userAgent.indexOf("Win") !== -1) {
-                os = "Windows";
-                if (userAgent.includes("Windows NT 10.0")) os = "Windows 10";
-                if (userAgent.includes("Windows NT 6.3")) os = "Windows 8.1";
-                if (userAgent.includes("Windows NT 6.2")) os = "Windows 8";
-                if (userAgent.includes("Windows NT 6.1")) os = "Windows 7";
-                device = "PC / Laptop";
-                platform = "Desktop";
-            } else if (userAgent.indexOf("Mac") !== -1) {
-                os = "MacOS";
-                device = "Macintosh";
-                platform = "Desktop";
-            } else if (userAgent.indexOf("Linux") !== -1 && userAgent.indexOf("Android") === -1) {
-                os = "Linux";
-                device = "Desktop";
-                platform = "Desktop";
-            } else if (userAgent.indexOf("Android") !== -1) {
-                os = "Android";
-                platform = "Android";
-                const verMatch = userAgent.match(/Android\s([0-9.]+)/);
-                if (verMatch) os += ` ${verMatch[1]}`;
-
-                // Try to extract device model from UA (fallback)
-                const match1 = userAgent.match(/;\s?([^;]+)\s?Build\//); 
-                const match2 = userAgent.match(/Android[^;]*;\s?([^;]+);/);
-                
-                if (match1 && match1[1]) {
-                    device = match1[1].trim();
-                } else if (match2 && match2[1]) {
-                    device = match2[1].trim();
-                } else {
-                    device = "Android Device";
-                }
-            } else if (userAgent.indexOf("iPhone") !== -1) {
-                os = "iOS";
-                device = "iPhone";
-                platform = "iOS";
-                const ver = userAgent.match(/OS (\d+)_/);
-                if(ver) os += " " + ver[1];
-            } else if (userAgent.indexOf("iPad") !== -1) {
-                os = "iOS";
-                device = "iPad";
-                platform = "iOS";
-            }
-
-            // --- CLIENT HINTS (Advanced Detection for Chrome/Edge/Opera) ---
-            if ((navigator as any).userAgentData) {
-                try {
-                    const uaData = await (navigator as any).userAgentData.getHighEntropyValues([
-                        "model",
-                        "platform",
-                        "platformVersion"
-                    ]);
-                    
-                    // Detect Windows 11
-                    if (uaData.platform === "Windows") {
-                        const major = parseInt(uaData.platformVersion.split('.')[0]);
-                        if (major >= 13) os = "Windows 11";
-                        else if (major > 0) os = "Windows 10"; 
-                    }
-                    
-                    // Precise Device Model (e.g., "Pixel 6", "2201117TY")
-                    if (uaData.model) {
-                        device = uaData.model;
-                    }
-                } catch(e) { console.warn("High Entropy Values not available"); }
-            }
-
-            // --- DEVICE NAME CLEANUP ---
-            // Try to make device names more readable if they are just codes
-            if (device.length <= 9 && /^[A-Z0-9]+$/.test(device.replace(/-/g, ''))) {
-               // Heuristics for codes (Optional mapping could go here if database available)
-               // For now, we trust the browser or user agent string
-            }
-
-            const ram = (navigator as any).deviceMemory ? `${(navigator as any).deviceMemory} GB` : "N/A";
-            
-            setSysInfo({ 
-                os: os, 
-                device: device, 
-                browser: browser,
-                platform: platform,
-                ram: ram, 
-                status: navigator.onLine ? "Online" : "Offline" 
-            });
-        };
-
-        getDetailedSystemInfo();
-
-        const updateOnlineStatus = () => { setSysInfo(prev => ({ ...prev, status: navigator.onLine ? "Online" : "Offline" })); };
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-        return () => { window.removeEventListener('online', updateOnlineStatus); window.removeEventListener('offline', updateOnlineStatus); };
-    }
-  }, [view]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,72 +212,6 @@ function App() {
 
   const selectedExam = examList.find(e => e.id === selectedExamId);
   const hasSession = currentUser?.session && currentUser.session !== '-' && currentUser.session.trim() !== '' && currentUser.session !== 'undefined';
-  
-  // LOGO CONSTANT REMOVED IN FAVOR OF ICON
-  // const logoUrl = "https://image2url.com/r2/default/images/1770007192296-ae4e2a39-302c-480c-ab6a-80be007c438a.png";
-
-  // --- VIEW: SYSTEM CHECK ---
-  if (view === 'system_check') {
-      const isOffline = sysInfo.status === 'Offline';
-      return (
-        <div className="min-h-screen relative flex items-center justify-center p-4 font-sans fade-in overflow-hidden" onClick={enterFullscreen}>
-            {/* Soft Ambient Background */}
-            <div className="absolute inset-0 bg-[#f8fafc]"></div>
-            <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-100/50 blur-[100px]"></div>
-            <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-red-50/50 blur-[100px]"></div>
-            
-            <div className="bg-white/70 backdrop-blur-2xl w-full max-w-md rounded-[2.5rem] p-6 md:p-8 shadow-2xl shadow-slate-200/50 border border-white relative z-10">
-                <div className="text-center mb-8 md:mb-10">
-                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mx-auto mb-6 transform rotate-3 border border-slate-50">
-                        <Zap size={32} className="text-blue-600 fill-blue-600 md:w-10 md:h-10" />
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">System Check</h2>
-                    <p className="text-slate-400 font-medium mt-2 text-sm md:text-base">Memeriksa kompatibilitas perangkat...</p>
-                </div>
-                
-                <div className="space-y-4 mb-8">
-                    <div className="flex items-center justify-between p-4 md:p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                                {sysInfo.platform === 'Desktop' ? <Monitor size={20} className="md:w-6 md:h-6" /> : sysInfo.platform === 'Unknown' ? <Laptop size={20} className="md:w-6 md:h-6"/> : <Smartphone size={20} className="md:w-6 md:h-6" />}
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Identitas Perangkat</p>
-                                <p className="font-bold text-slate-800 text-xs md:text-sm">{sysInfo.platform}</p>
-                                <div className="mt-1">
-                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100">{sysInfo.browser}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-emerald-100 text-emerald-600 p-1.5 rounded-full"><Check size={14} className="md:w-4 md:h-4" strokeWidth={4} /></div>
-                    </div>
-                    
-                    <div className={`flex items-center justify-between p-4 md:p-5 rounded-2xl border shadow-sm transition-all ${isOffline ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100 hover:shadow-md group'}`}>
-                        <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center ${isOffline ? 'bg-red-100 text-red-500' : 'bg-slate-50 text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
-                                {isOffline ? <WifiOff size={20} className="md:w-6 md:h-6" /> : <Wifi size={20} className="md:w-6 md:h-6" />}
-                            </div>
-                            <div>
-                                <p className={`text-[10px] font-bold uppercase tracking-wider ${isOffline ? 'text-red-400' : 'text-slate-400'}`}>Koneksi Internet</p>
-                                <p className={`font-bold text-xs md:text-base ${isOffline ? 'text-red-600' : 'text-slate-700'}`}>{sysInfo.status}</p>
-                            </div>
-                        </div>
-                        <div className={`w-3 h-3 rounded-full ${isOffline ? 'bg-red-500 animate-ping' : 'bg-emerald-500 shadow-[0_0_10px_#10b981]'}`}></div>
-                    </div>
-                </div>
-
-                {/* Updated Button with Modern Theme Gradient */}
-                <button 
-                    onClick={() => { enterFullscreen(); setView('login'); }} 
-                    disabled={isOffline} 
-                    className={`w-full font-black py-4 rounded-2xl shadow-xl transition-all duration-300 flex items-center justify-center gap-3 group text-xs md:text-sm tracking-[0.2em] uppercase ${isOffline ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-1'}`}
-                >
-                    {isOffline ? "KONEKSI TERPUTUS" : (<>LANJUTKAN <ArrowRight size={16} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" /></>)}
-                </button>
-            </div>
-        </div>
-      );
-  }
 
   // --- VIEW: LOGIN (NEW DESIGN) ---
   if (view === 'login') {
@@ -419,9 +233,8 @@ function App() {
                     <div className="p-6 md:p-12 relative">
                         <div className="text-center mb-8 md:mb-10">
                             <div className="inline-flex p-3 md:p-4 bg-white rounded-3xl shadow-lg shadow-slate-200/50 mb-4 md:mb-6 border border-white">
-                                {/* REPLACED IMG WITH ICON */}
                                 <img 
-                                    src="https://image2url.com/r2/default/images/1770096905658-b4833d12-b272-4a2b-957b-37734ea24417.jpg" 
+                                    src="https://image2url.com/r2/default/images/1770216884638-0a7493fe-7dc5-4bde-8900-68d7b163679a.png" 
                                     className="w-12 h-12 md:w-16 md:h-16 object-contain animate-float" 
                                     alt="Logo" 
                                 />
@@ -457,7 +270,7 @@ function App() {
                             )}
                             
                             {/* UPDATED: White Button with Blue-Red Gradient List (Bottom Border) */}
-                            <button disabled={loading} className="w-full bg-white text-slate-800 font-black py-4 rounded-2xl relative overflow-hidden shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 flex justify-center items-center mt-6 gap-3 text-xs md:text-sm uppercase tracking-widest group">
+                            <button disabled={loading} className="w-full bg-white text-slate-800 font-black py-4 rounded-2xl relative overflow-hidden shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] active:shadow-md transition-all duration-200 flex justify-center items-center mt-6 gap-3 text-xs md:text-sm uppercase tracking-widest group">
                                 <div className="absolute bottom-0 left-0 w-full h-[5px] bg-gradient-to-r from-blue-600 via-purple-500 to-red-600"></div>
                                 {loading ? (<><Loader2 size={20} className="animate-spin text-blue-600" /> PROSES...</>) : (<>LOGIN <LogIn size={18} className="text-blue-600 group-hover:translate-x-1 transition-transform" /></>)}
                             </button>
@@ -554,52 +367,39 @@ function App() {
                                         <p className="font-bold">Anda belum memiliki jadwal ujian.</p>
                                     </div>
                                 )}
-                                {errorMsg && <p className="text-red-500 text-xs font-bold mt-2 flex items-center gap-2 bg-red-50 p-3 rounded-xl w-fit"><AlertCircle size={16}/> {errorMsg}</p>}
+                                {errorMsg && <p className="text-red-500 text-xs font-bold mt-2 flex items-center gap-2 bg-red-50 p-3 rounded-xl border border-red-100"><AlertCircle size={14}/> {errorMsg}</p>}
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Confirm Modal */}
-                {showConfirmModal && selectedExam && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md fade-in">
-                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden relative transform scale-100 transition-all border border-white/20">
-                            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-                            <button onClick={() => setShowConfirmModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition"><X size={24} /></button>
-                            
-                            <div className="p-8 pt-10 text-center">
-                                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-indigo-100">
-                                    <Monitor size={40}/>
-                                </div>
-                                <h3 className="text-2xl font-black text-slate-800 mb-1">Konfirmasi Tes</h3>
-                                <p className="text-slate-500 text-sm mb-8">Anda akan memulai sesi ujian berikut:</p>
-                                
-                                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4 text-left shadow-sm mb-8">
-                                    <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">Mata Pelajaran</span>
-                                        <span className="text-base font-bold text-indigo-700 text-right">{selectedExam.nama_ujian}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-400 uppercase">Alokasi Waktu</span>
-                                        <span className="text-base font-bold text-slate-700">{selectedExam.durasi} Menit</span>
-                                    </div>
-                                </div>
-
-                                <button onClick={handleStartExam} disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl hover:bg-black transition-all transform hover:-translate-y-1 flex justify-center items-center gap-2">
-                                  {loading ? <Loader2 size={24} className="animate-spin"/> : <>MULAI MENGERJAKAN <ArrowRight size={20}/></>}
-                                </button>
+            {/* CONFIRM MODAL */}
+            {showConfirmModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md fade-in">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden transform scale-100 transition-all border border-slate-100">
+                        <div className="p-8 text-center">
+                            <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-indigo-100">
+                                <PlayCircle size={40} className="ml-1" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 mb-2">Mulai Ujian?</h3>
+                            <p className="text-slate-500 mb-8 text-sm leading-relaxed">Waktu akan berjalan mundur otomatis.<br/>Pastikan koneksi internet stabil.</p>
+                            <div className="flex gap-4">
+                                <button onClick={() => setShowConfirmModal(false)} className="flex-1 py-4 px-4 bg-white border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition">Batal</button>
+                                <button onClick={handleStartExam} className="flex-1 py-4 px-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg transition">Ya, Mulai</button>
                             </div>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </>
     );
   }
-  
+
+  // --- EXAM VIEW ---
   if (view === 'exam' && currentUser && selectedExam) {
-      return (
-          <StudentExam 
+    return (
+        <StudentExam 
             exam={selectedExam}
             questions={questions}
             userFullName={currentUser.nama_lengkap}
@@ -608,34 +408,36 @@ function App() {
             startTime={startTime}
             onFinish={handleFinishExam}
             onExit={handleLogout}
-          />
-      );
+        />
+    );
   }
 
+  // --- RESULT VIEW ---
   if (view === 'result') {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] font-sans p-4" onClick={enterFullscreen}>
-              <div className="bg-white p-10 md:p-14 rounded-[2.5rem] shadow-2xl text-center max-w-lg w-full border border-slate-100 relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-green-500"></div>
-                  <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-100 border-4 border-white">
-                      <Check size={48} strokeWidth={4} />
-                  </div>
-                  <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Ujian Selesai!</h2>
-                  <p className="text-slate-500 mb-8 font-medium leading-relaxed">Terima kasih, jawaban anda telah berhasil disimpan ke dalam sistem.</p>
-                  
-                  <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-200/60">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Peserta</p>
-                      <p className="font-bold text-slate-800 text-lg mb-4">{currentUser?.nama_lengkap}</p>
-                      <div className="h-px bg-slate-200 mb-4"></div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Mata Pelajaran</p>
-                      <p className="font-bold text-indigo-600 text-lg">{selectedExam?.nama_ujian}</p>
-                  </div>
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center font-sans fade-in">
+            <div className="bg-white p-10 md:p-14 rounded-[2.5rem] shadow-xl max-w-lg w-full border border-slate-200 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-green-500"></div>
+                <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-emerald-100 shadow-lg animate-bounce-slow">
+                    <Check size={48} strokeWidth={4} />
+                </div>
+                <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Ujian Selesai!</h2>
+                <p className="text-slate-500 mb-8 font-medium">Terima kasih telah mengikuti ujian.<br/>Jawaban Anda telah berhasil disimpan.</p>
+                
+                <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Peserta</p>
+                    <p className="text-lg font-bold text-slate-800">{currentUser?.nama_lengkap}</p>
+                    <div className="w-10 h-1 bg-slate-200 mx-auto my-3 rounded-full"></div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Mata Pelajaran</p>
+                    <p className="text-lg font-bold text-indigo-600">{selectedExam?.nama_ujian}</p>
+                </div>
 
-                  <button onClick={handleLogout} className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-black transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2">
-                      <LogOut size={20} /> KEMBALI KE HALAMAN LOGIN
-                  </button>
-              </div>
-          </div>
+                <button onClick={handleLogout} className="w-full py-4 bg-slate-800 text-white font-bold rounded-2xl hover:bg-slate-900 transition shadow-lg shadow-slate-200 transform active:scale-95 flex items-center justify-center gap-2">
+                    <LogOut size={18} /> KELUAR APLIKASI
+                </button>
+            </div>
+            <p className="mt-8 text-slate-400 text-xs font-bold tracking-widest uppercase">CBT System © 2026</p>
+        </div>
       );
   }
 

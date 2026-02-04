@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { School, Users, PlayCircle, CheckCircle2, AlertCircle, Key, Activity, Calendar, MapPin, Clock, Database, BookOpen } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { School, Users, PlayCircle, CheckCircle2, AlertCircle, Key, Activity, Calendar, MapPin, Clock, Database, BookOpen, UserX, Search, BarChart3, Filter } from 'lucide-react';
 import { User } from '../../types';
 import { SimpleDonutChart } from '../../utils/adminHelpers';
 
@@ -9,6 +9,9 @@ interface OverviewTabProps {
 }
 
 const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserState }) => {
+    const [schoolSearch, setSchoolSearch] = useState('');
+    const [kecamatanFilter, setKecamatanFilter] = useState('all');
+
     const stats = useMemo(() => {
         let counts = dashboardData.statusCounts || { OFFLINE: 0, LOGGED_IN: 0, WORKING: 0, FINISHED: 0 };
         // FIX: Ensure total is calculated from actual user array length to be accurate
@@ -35,6 +38,54 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
         return { counts, total };
     }, [dashboardData, currentUserState]);
 
+    // Extract Unique Kecamatans for Filter
+    const uniqueKecamatans = useMemo(() => {
+        if (!dashboardData.allUsers) return [];
+        const kecs = new Set(dashboardData.allUsers.map((u: any) => u.kecamatan).filter((k: any) => k && k !== '-'));
+        return Array.from(kecs).sort();
+    }, [dashboardData.allUsers]);
+
+    // Calculate Stats Per School for Admin Pusat
+    const schoolStats = useMemo(() => {
+        if (currentUserState.role !== 'admin_pusat' || !dashboardData.allUsers) return [];
+
+        const schoolMap: Record<string, { name: string, kecamatan: string, total: number, offline: number, login: number, working: number, finished: number }> = {};
+
+        dashboardData.allUsers.forEach((u: any) => {
+            const schoolName = u.school || 'Tanpa Sekolah';
+            if (!schoolMap[schoolName]) {
+                schoolMap[schoolName] = { 
+                    name: schoolName, 
+                    kecamatan: u.kecamatan || '-',
+                    total: 0, offline: 0, login: 0, working: 0, finished: 0 
+                };
+            }
+            
+            schoolMap[schoolName].total++;
+            
+            const status = u.status || 'OFFLINE';
+            if (status === 'OFFLINE') schoolMap[schoolName].offline++;
+            else if (status === 'LOGGED_IN') schoolMap[schoolName].login++;
+            else if (status === 'WORKING') schoolMap[schoolName].working++;
+            else if (status === 'FINISHED') schoolMap[schoolName].finished++;
+        });
+
+        let results = Object.values(schoolMap).sort((a, b) => b.total - a.total);
+
+        // Apply Kecamatan Filter
+        if (kecamatanFilter !== 'all') {
+            results = results.filter(s => (s.kecamatan || '').toLowerCase() === kecamatanFilter.toLowerCase());
+        }
+
+        // Apply Search Filter
+        if (schoolSearch) {
+            const lowerSearch = schoolSearch.toLowerCase();
+            results = results.filter(s => s.name.toLowerCase().includes(lowerSearch));
+        }
+
+        return results;
+    }, [dashboardData.allUsers, currentUserState.role, schoolSearch, kecamatanFilter]);
+
     const { OFFLINE, LOGGED_IN, WORKING, FINISHED } = stats.counts;
     const displayTotalUsers = stats.total;
     const totalStatus = OFFLINE + LOGGED_IN + WORKING + FINISHED;
@@ -44,7 +95,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
     
     const statusData = [
         { value: OFFLINE, color: '#e2e8f0', label: 'Belum Login' },
-        { value: LOGGED_IN, color: '#facc15', label: 'Sudah Login' },
+        { value: LOGGED_IN, color: '#facc15', label: 'Login' },
         { value: WORKING, color: '#3b82f6', label: 'Mengerjakan' },
         { value: FINISHED, color: '#10b981', label: 'Selesai' },
     ];
@@ -155,6 +206,12 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
                 <div><p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Total Terdaftar</p><h3 className="text-2xl md:text-3xl font-black text-slate-800 mt-1">{displayTotalUsers}</h3></div>
                 <div className="bg-slate-100 p-3 rounded-xl text-slate-600"><Users size={28}/></div>
             </div>
+            
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                <div><p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Belum Login</p><h3 className="text-2xl md:text-3xl font-black text-slate-500 mt-1">{OFFLINE}</h3></div>
+                <div className="bg-slate-100 p-3 rounded-xl text-slate-500"><UserX size={28}/></div>
+            </div>
+
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
                 <div><p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Sedang Ujian</p><h3 className="text-2xl md:text-3xl font-black text-blue-600 mt-1">{WORKING}</h3></div>
                 <div className="bg-blue-50 p-3 rounded-xl text-blue-600"><PlayCircle size={28}/></div>
@@ -201,10 +258,10 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
                 <h3 className="text-slate-800 font-bold mb-8 text-sm uppercase tracking-wide w-full border-b pb-4">Statistik Peserta</h3>
                 <SimpleDonutChart data={statusData} />
                 <div className="grid grid-cols-2 gap-4 mt-8 w-full text-xs font-bold text-slate-500">
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-200 rounded-full"></div> Offline ({totalStatus > 0 ? Math.round((OFFLINE/totalStatus)*100) : 0}%)</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-200 rounded-full"></div> Belum Login ({totalStatus > 0 ? Math.round((OFFLINE/totalStatus)*100) : 0}%)</div>
                     <div className="flex items-center gap-2"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div> Login ({totalStatus > 0 ? Math.round((LOGGED_IN/totalStatus)*100) : 0}%)</div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full"></div> Working ({totalStatus > 0 ? Math.round((WORKING/totalStatus)*100) : 0}%)</div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Done ({totalStatus > 0 ? Math.round((FINISHED/totalStatus)*100) : 0}%)</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-full"></div> Mengerjakan ({totalStatus > 0 ? Math.round((WORKING/totalStatus)*100) : 0}%)</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Selesai ({totalStatus > 0 ? Math.round((FINISHED/totalStatus)*100) : 0}%)</div>
                 </div>
             </div>
 
@@ -282,6 +339,79 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
                 </div>
             </div>
         </div>
+
+        {/* School Statistics Table for Admin Pusat */}
+        {currentUserState.role === 'admin_pusat' && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 border border-indigo-100"><BarChart3 size={20}/></div>
+                        <div>
+                            <h3 className="font-bold text-slate-800">Statistik Per Sekolah</h3>
+                            <p className="text-xs text-slate-500">Rekapitulasi status peserta berdasarkan sekolah</p>
+                        </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+                        <div className="relative group w-full sm:w-48">
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                            <select 
+                                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 font-bold text-slate-700 transition-all bg-slate-50 focus:bg-white cursor-pointer appearance-none"
+                                value={kecamatanFilter}
+                                onChange={e => setKecamatanFilter(e.target.value)}
+                            >
+                                <option value="all">Semua Kecamatan</option>
+                                {uniqueKecamatans.map((k:any) => <option key={k} value={k}>{k}</option>)}
+                            </select>
+                        </div>
+                        <div className="relative group w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
+                            <input 
+                                type="text" 
+                                placeholder="Cari Nama Sekolah..." 
+                                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 font-bold text-slate-700 placeholder-slate-400 transition-all bg-slate-50 focus:bg-white" 
+                                value={schoolSearch} 
+                                onChange={e => setSchoolSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-[500px] custom-scrollbar rounded-xl border border-slate-100">
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead className="bg-slate-50 font-bold text-slate-500 uppercase text-[10px] tracking-wider sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th className="p-4 border-b border-slate-200">Nama Sekolah</th>
+                                <th className="p-4 border-b border-slate-200">Kecamatan</th>
+                                <th className="p-4 border-b border-slate-200 text-center">Total Siswa</th>
+                                <th className="p-4 border-b border-slate-200 text-center text-slate-400">Belum Login</th>
+                                <th className="p-4 border-b border-slate-200 text-center text-yellow-600">Login</th>
+                                <th className="p-4 border-b border-slate-200 text-center text-blue-600">Mengerjakan</th>
+                                <th className="p-4 border-b border-slate-200 text-center text-emerald-600">Selesai</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {schoolStats.length > 0 ? (
+                                schoolStats.map((stat, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="p-4 font-bold text-slate-700">{stat.name}</td>
+                                        <td className="p-4 text-slate-600 text-xs font-medium">{stat.kecamatan}</td>
+                                        <td className="p-4 text-center font-bold text-slate-800 bg-slate-50">{stat.total}</td>
+                                        <td className="p-4 text-center font-mono text-slate-400">{stat.offline}</td>
+                                        <td className="p-4 text-center font-mono text-yellow-600 font-bold bg-yellow-50/50">{stat.login}</td>
+                                        <td className="p-4 text-center font-mono text-blue-600 font-bold bg-blue-50/50">{stat.working}</td>
+                                        <td className="p-4 text-center font-mono text-emerald-600 font-bold bg-emerald-50/50">{stat.finished}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={7} className="p-8 text-center text-slate-400 italic">Tidak ada data sekolah ditemukan.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
     </div>
     );
 };

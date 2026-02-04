@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Home, LogOut, Menu, Monitor, Group, Clock, Printer, List, Calendar, Key, FileQuestion, LayoutDashboard, BarChart3, Award, RefreshCw, X, CreditCard, Bell, CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 import { User } from '../types';
@@ -66,11 +66,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false); // New State for Desktop Collapse
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  
+  // Real-time Notification State
+  const [finishAlert, setFinishAlert] = useState<{name: string, school: string} | null>(null);
+  const lastFinishTimeRef = useRef<number>(Date.now());
 
   const [currentUserState, setCurrentUserState] = useState<User>(user);
   
   // UPDATED LOGO
-  const logoUrl = "https://image2url.com/r2/default/images/1770096905658-b4833d12-b272-4a2b-957b-37734ea24417.jpg";
+  const logoUrl = "https://image2url.com/r2/default/images/1770216884638-0a7493fe-7dc5-4bde-8900-68d7b163679a.png";
 
   useEffect(() => {
     setCurrentUserState(user);
@@ -113,7 +117,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter finished students for notification from Activity Feed
+  // Monitor Activity Feed for NEW 'FINISH' events
+  useEffect(() => {
+      if (!dashboardData.activityFeed || !Array.isArray(dashboardData.activityFeed)) return;
+
+      const newFinishes = dashboardData.activityFeed.filter((log: any) => 
+          log.action === 'FINISH' && 
+          new Date(log.timestamp).getTime() > lastFinishTimeRef.current
+      );
+
+      if (newFinishes.length > 0) {
+          // Update timestamp cursor to the latest event found
+          const maxTime = Math.max(...newFinishes.map((l:any) => new Date(l.timestamp).getTime()));
+          lastFinishTimeRef.current = maxTime;
+
+          // Get the most relevant log
+          let targetLog = newFinishes[0]; 
+          
+          // If Admin Sekolah, verify the log belongs to their school
+          if (currentUserState.role === 'admin_sekolah') {
+              const mySchool = (currentUserState.kelas_id || '').toLowerCase();
+              const schoolLog = newFinishes.find((l:any) => (l.school || '').toLowerCase() === mySchool);
+              if (!schoolLog) return; // No relevant student finished
+              targetLog = schoolLog;
+          }
+
+          // Trigger Alert
+          setFinishAlert({ name: targetLog.fullname, school: targetLog.school });
+          
+          // Auto dismiss after 6 seconds
+          const timer = setTimeout(() => setFinishAlert(null), 6000);
+          return () => clearTimeout(timer);
+      }
+  }, [dashboardData.activityFeed, currentUserState]);
+
+  // Filter finished students for notification from Activity Feed (Dropdown)
   const finishedStudents = useMemo(() => {
       if (!dashboardData.activityFeed) return [];
       
@@ -161,6 +199,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans overflow-hidden">
       {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/60 z-40 md:hidden fade-in backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>}
+      
+      {/* Real-time Finish Alert Notification */}
+      {finishAlert && (
+        <div className="fixed top-24 right-6 z-[100] bg-white border-l-4 border-emerald-500 shadow-2xl rounded-r-xl p-4 flex items-center gap-4 animate-in slide-in-from-right-10 fade-in duration-500 max-w-sm cursor-pointer" onClick={() => setFinishAlert(null)}>
+            <div className="bg-emerald-100 text-emerald-600 p-3 rounded-full shrink-0 animate-bounce">
+                <CheckCircle2 size={24} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <h4 className="font-black text-slate-800 text-sm">Peserta Selesai!</h4>
+                <p className="text-xs text-slate-600 font-bold mt-0.5 truncate">{finishAlert.name}</p>
+                <p className="text-[10px] text-slate-400 font-medium truncate">{finishAlert.school}</p>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); setFinishAlert(null); }} className="absolute top-2 right-2 text-slate-300 hover:text-slate-500 bg-transparent p-1 rounded-full"><X size={14}/></button>
+        </div>
+      )}
       
       {/* SIDEBAR */}
       <aside 
@@ -336,7 +389,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                                                 <p className="text-sm font-bold text-slate-700 leading-tight">{s.fullname}</p>
                                                 <p className="text-xs text-slate-500 mt-1">{s.school}</p>
                                                 <p className="text-[10px] text-slate-400 mt-1 font-mono flex items-center gap-1">
-                                                    <span>{new Date(s.timestamp).toLocaleTimeString()}</span>
+                                                    <span>{new Date(s.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                                                     <span>•</span>
                                                     <span>{s.details.split(':').pop() || 'Score -'}</span>
                                                 </p>
