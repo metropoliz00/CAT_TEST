@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Award, FileText, Loader2, BookOpen } from 'lucide-react';
-import { api } from '../../services/api';
-import { exportToExcel, getPredicateBadge } from '../../utils/adminHelpers';
 
-const RankingTab = ({ students }: { students: any[] }) => {
+import React, { useState, useMemo, useEffect } from 'react';
+import { Award, FileText, Loader2, BookOpen, Printer } from 'lucide-react';
+import { api } from '../../services/api';
+import { exportToExcel, getPredicateBadge, getScorePredicate } from '../../utils/adminHelpers';
+import { User } from '../../types';
+
+const RankingTab = ({ students, currentUser }: { students: any[], currentUser: User }) => {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [filterKecamatan, setFilterKecamatan] = useState('all');
@@ -78,6 +80,89 @@ const RankingTab = ({ students }: { students: any[] }) => {
             setFilterKecamatan('all');
         }
     };
+
+    const handlePrint = () => {
+        if (filteredData.length === 0) return alert("Tidak ada data untuk dicetak.");
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const schoolName = filterSchool !== 'all' ? filterSchool : 'SEMUA SEKOLAH';
+        const kecamatanName = filterKecamatan !== 'all' ? filterKecamatan : (filterSchool !== 'all' ? (userMap[filteredData[0]?.username]?.kecamatan || '-') : 'SEMUA KECAMATAN');
+        const subjectName = filterSubject ? filterSubject : 'SEMUA MATA PELAJARAN';
+        
+        const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        const adminName = currentUser.nama_lengkap;
+
+        const rows = filteredData.map((d, i) => `
+            <tr>
+                <td style="text-align: center;">${i + 1}</td>
+                <td>${d.nama}</td>
+                <td>${d.sekolah}</td>
+                <td>${userMap[d.username]?.kecamatan || '-'}</td>
+                <td style="text-align: center;">${d.mapel}</td>
+                <td style="text-align: center; font-weight: bold;">${d.nilai}</td>
+                <td style="text-align: center;">${getScorePredicate(parseFloat(d.nilai) || 0)}</td>
+            </tr>
+        `).join('');
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Cetak Peringkat</title>
+                <style>
+                    @page { size: A4 portrait; margin: 2.5cm; }
+                    body { font-family: 'Times New Roman', serif; font-size: 12pt; }
+                    .header { text-align: center; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
+                    .header h2 { margin: 0; font-size: 14pt; }
+                    .header h3 { margin: 5px 0 0; font-size: 12pt; font-weight: normal; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11pt; }
+                    th, td { border: 1px solid black; padding: 5px 8px; }
+                    th { background-color: #f0f0f0; text-align: center; }
+                    .signature { float: right; margin-top: 40px; text-align: center; width: 250px; }
+                    .signature p { margin: 0; }
+                    @media print {
+                        body { -webkit-print-color-adjust: exact; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>PERINGKAT OSN-S</h2>
+                    <h3>${schoolName} - ${kecamatanName}</h3>
+                    ${filterSubject ? `<h3 style="font-size: 11pt; margin-top: 5px;">Mapel: ${subjectName}</h3>` : ''}
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="40">Rank</th>
+                            <th>Nama Peserta</th>
+                            <th>Sekolah</th>
+                            <th>Kecamatan</th>
+                            <th>Mapel</th>
+                            <th>Nilai</th>
+                            <th>Predikat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+
+                <div class="signature">
+                    <p>Tuban, ${dateStr}</p>
+                    <p>Admin / Proktor</p>
+                    <br><br><br><br>
+                    <p><b>${adminName}</b></p>
+                </div>
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
     
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
@@ -104,6 +189,9 @@ const RankingTab = ({ students }: { students: any[] }) => {
                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterKecamatan} onChange={e => setFilterKecamatan(e.target.value)}><option value="all">Semua Kecamatan</option>{uniqueKecamatans.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}><option value="all">Semua Sekolah</option>{uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
                     
+                    <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-900 transition shadow-sm">
+                        <Printer size={16}/> Cetak
+                    </button>
                     <button onClick={() => exportToExcel(filteredData, `Ranking_${filterSubject || 'All'}`)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition shadow-lg shadow-emerald-200"><FileText size={16}/> Export</button>
                 </div>
             </div>

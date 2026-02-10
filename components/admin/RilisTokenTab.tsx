@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Key, RefreshCw, Save, X, Edit, Clock, Layers, ShieldCheck, Copy, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -28,16 +29,21 @@ const RilisTokenTab = ({ currentUser, token, duration, refreshData, isRefreshing
             setLoadingExams(true);
             try {
                 const data = await api.getExams();
-                setExams(data);
-                
-                // Initialize limits dictionary
-                const limits: Record<string, number> = {};
-                data.forEach(e => {
-                    limits[e.id] = e.max_questions || 0;
-                });
-                setExamLimits(limits);
+                if (Array.isArray(data)) {
+                    setExams(data);
+                    
+                    // Initialize limits dictionary
+                    const limits: Record<string, number> = {};
+                    data.forEach(e => {
+                        limits[e.id] = e.max_questions || 0;
+                    });
+                    setExamLimits(limits);
+                } else {
+                    setExams([]);
+                }
             } catch (e) {
                 console.error("Gagal memuat mapel", e);
+                setExams([]);
             } finally {
                 setLoadingExams(false);
             }

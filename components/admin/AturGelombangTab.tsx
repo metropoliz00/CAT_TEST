@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Save, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
@@ -28,14 +29,16 @@ const AturGelombangTab = ({ students }: { students: any[] }) => {
         try {
             const data = await api.getSchoolSchedules();
             const map: Record<string, { gelombang: string, tanggal: string, tanggal_selesai?: string }> = {};
-            data.forEach(d => {
-                // Pastikan tanggal selesai terisi, jika kosong di DB gunakan tanggal mulai
-                map[d.school] = { 
-                    gelombang: d.gelombang, 
-                    tanggal: d.tanggal, 
-                    tanggal_selesai: d.tanggal_selesai || d.tanggal 
-                };
-            });
+            if (Array.isArray(data)) {
+                data.forEach(d => {
+                    // Pastikan tanggal selesai terisi, jika kosong di DB gunakan tanggal mulai
+                    map[d.school] = { 
+                        gelombang: d.gelombang, 
+                        tanggal: d.tanggal, 
+                        tanggal_selesai: d.tanggal_selesai || d.tanggal 
+                    };
+                });
+            }
             setSchedules(map);
         } catch(e) { console.error("Error loading schedules", e); }
         finally { setLoading(false); }

@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { LayoutDashboard, FileText, Loader2, BookOpen } from 'lucide-react';
+import { LayoutDashboard, FileText, Loader2, Printer } from 'lucide-react';
 import { api } from '../../services/api';
 import { exportToExcel, formatDurationToText } from '../../utils/adminHelpers';
+import { User } from '../../types';
 
-const RekapTab = ({ students }: { students: any[] }) => {
+const RekapTab = ({ students, currentUser }: { students: any[], currentUser: User }) => {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [filterSchool, setFilterSchool] = useState('all');
@@ -60,6 +62,87 @@ const RekapTab = ({ students }: { students: any[] }) => {
         }
     };
 
+    const handlePrint = () => {
+        if (filteredData.length === 0) return alert("Tidak ada data untuk dicetak.");
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const schoolName = filterSchool !== 'all' ? filterSchool : 'SEMUA SEKOLAH';
+        const kecamatanName = filterKecamatan !== 'all' ? filterKecamatan : (filterSchool !== 'all' ? (userMap[filteredData[0]?.username]?.kecamatan || '-') : 'SEMUA KECAMATAN');
+        const subjectName = filterSubject !== 'all' ? filterSubject : 'SEMUA MATA PELAJARAN';
+        
+        const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        const adminName = currentUser.nama_lengkap;
+
+        const rows = filteredData.map((d, i) => `
+            <tr>
+                <td style="text-align: center;">${i + 1}</td>
+                <td>${d.username}</td>
+                <td>${d.nama}</td>
+                <td>${d.sekolah}</td>
+                <td style="text-align: center;">${d.mapel}</td>
+                <td style="text-align: center; font-weight: bold;">${d.nilai}</td>
+            </tr>
+        `).join('');
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Cetak Rekap Nilai</title>
+                <style>
+                    @page { size: A4 portrait; margin: 2.5cm; }
+                    body { font-family: 'Times New Roman', serif; font-size: 12pt; }
+                    .header { text-align: center; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
+                    .header h2 { margin: 0; font-size: 14pt; }
+                    .header h3 { margin: 5px 0 0; font-size: 12pt; font-weight: normal; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11pt; }
+                    th, td { border: 1px solid black; padding: 5px 8px; }
+                    th { background-color: #f0f0f0; text-align: center; }
+                    .signature { float: right; margin-top: 40px; text-align: center; width: 250px; }
+                    .signature p { margin: 0; }
+                    @media print {
+                        body { -webkit-print-color-adjust: exact; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>REKAP NILAI OSN-S</h2>
+                    <h3>${schoolName} - ${kecamatanName}</h3>
+                    ${filterSubject !== 'all' ? `<h3 style="font-size: 11pt; margin-top: 5px;">Mapel: ${subjectName}</h3>` : ''}
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="40">No</th>
+                            <th>Username</th>
+                            <th>Nama Peserta</th>
+                            <th>Sekolah</th>
+                            <th>Mapel</th>
+                            <th>Nilai</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+
+                <div class="signature">
+                    <p>Tuban, ${dateStr}</p>
+                    <p>Admin / Proktor</p>
+                    <br><br><br><br>
+                    <p><b>${adminName}</b></p>
+                </div>
+                <script>window.onload = function() { window.print(); }</script>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -80,6 +163,9 @@ const RekapTab = ({ students }: { students: any[] }) => {
                         <option value="all">Semua Sekolah</option>
                         {uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}
                      </select>
+                     <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-900 transition shadow-sm">
+                        <Printer size={16}/> Cetak
+                     </button>
                      <button onClick={() => exportToExcel(filteredData, `Rekap_Nilai_${filterSubject}`)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition shadow-lg shadow-emerald-200">
                         <FileText size={16}/> Export
                      </button>

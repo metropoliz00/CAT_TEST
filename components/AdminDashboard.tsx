@@ -171,7 +171,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         case 'rekap': return "Rekapitulasi Nilai";
         case 'analisis': return "Analisis Butir Soal";
         case 'ranking': return "Peringkat Peserta";
-        case 'data_user': return "Daftar Siswa";
+        case 'data_user': return "Daftar Peserta";
         case 'manajemen_admin': return "Manajemen Admin";
         case 'status_tes': return "Status Tes & Reset Login";
         case 'kelompok_tes': return "Kelompok Tes (Assignment)";
@@ -540,9 +540,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     {activeTab === 'atur_gelombang' && currentUserState.role === 'admin_pusat' && <AturGelombangTab students={dashboardData.allUsers || []} />}
                     {activeTab === 'rilis_token' && <RilisTokenTab currentUser={currentUserState} token={dashboardData.token} duration={dashboardData.duration} maxQuestions={dashboardData.maxQuestions} refreshData={fetchData} isRefreshing={isRefreshing} />}
                     {activeTab === 'bank_soal' && currentUserState.role === 'admin_pusat' && <BankSoalTab />}
-                    {activeTab === 'rekap' && currentUserState.role === 'admin_pusat' && <RekapTab students={dashboardData.allUsers} />}
-                    {activeTab === 'ranking' && currentUserState.role === 'admin_pusat' && <RankingTab students={dashboardData.allUsers} />}
-                    {activeTab === 'analisis' && currentUserState.role === 'admin_pusat' && <AnalisisTab students={dashboardData.allUsers} />}
+                    {activeTab === 'rekap' && currentUserState.role === 'admin_pusat' && <RekapTab students={dashboardData.allUsers || []} currentUser={currentUserState} />}
+                    {activeTab === 'ranking' && currentUserState.role === 'admin_pusat' && <RankingTab students={dashboardData.allUsers || []} currentUser={currentUserState} />}
+                    {activeTab === 'analisis' && currentUserState.role === 'admin_pusat' && <AnalisisTab students={dashboardData.allUsers || []} />}
                 </>
             )}
           </div>
