@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Home, LogOut, Menu, Monitor, Group, Clock, Printer, List, Calendar, Key, FileQuestion, LayoutDashboard, BarChart3, Award, RefreshCw, X, CreditCard, Bell, CheckCircle2, ChevronDown, User as UserIcon, Settings, Camera, Upload, Save, Loader2 } from 'lucide-react';
+import { Home, LogOut, Menu, Monitor, Group, Clock, Printer, List, Calendar, Key, FileQuestion, LayoutDashboard, BarChart3, Award, RefreshCw, X, CreditCard, Bell, CheckCircle2, ChevronDown, User as UserIcon, Settings, Camera, Upload, Save, Loader2, Shield } from 'lucide-react';
 import { api } from '../services/api';
 import { User } from '../types';
 import { DashboardSkeleton } from '../utils/adminHelpers';
@@ -16,6 +17,7 @@ import RankingTab from './admin/RankingTab';
 import AnalisisTab from './admin/AnalisisTab';
 import StatusTesTab from './admin/StatusTesTab';
 import DaftarPesertaTab from './admin/DaftarPesertaTab';
+import ManajemenAdminTab from './admin/ManajemenAdminTab';
 import RilisTokenTab from './admin/RilisTokenTab';
 import BankSoalTab from './admin/BankSoalTab';
 
@@ -24,7 +26,7 @@ interface AdminDashboardProps {
     onLogout: () => void;
 }
 
-type TabType = 'overview' | 'rekap' | 'analisis' | 'ranking' | 'bank_soal' | 'data_user' | 'status_tes' | 'kelompok_tes' | 'rilis_token' | 'atur_sesi' | 'atur_gelombang' | 'cetak_absensi' | 'cetak_kartu';
+type TabType = 'overview' | 'rekap' | 'analisis' | 'ranking' | 'bank_soal' | 'data_user' | 'manajemen_admin' | 'status_tes' | 'kelompok_tes' | 'rilis_token' | 'atur_sesi' | 'atur_gelombang' | 'cetak_absensi' | 'cetak_kartu';
 
 // Enhanced Loading Component
 const DashboardLoadingScreen = () => (
@@ -169,7 +171,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         case 'rekap': return "Rekapitulasi Nilai";
         case 'analisis': return "Analisis Butir Soal";
         case 'ranking': return "Peringkat Peserta";
-        case 'data_user': return "Daftar Peserta";
+        case 'data_user': return "Daftar Siswa";
+        case 'manajemen_admin': return "Manajemen Admin";
         case 'status_tes': return "Status Tes & Reset Login";
         case 'kelompok_tes': return "Kelompok Tes (Assignment)";
         case 'atur_sesi': return "Atur Sesi & Absensi";
@@ -341,19 +344,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 {!isCollapsed && <span>Daftar Peserta</span>}
             </button>
           )}
-          {currentUserState.role === 'admin_pusat' && (
-              <button onClick={() => handleTabChange('atur_gelombang')} className={navButtonClass('atur_gelombang')} title="Atur Gelombang">
-                  <Calendar size={20} className="shrink-0" /> 
-                  {!isCollapsed && <span>Atur Gelombang</span>}
-              </button>
-          )}
+          
           <button onClick={() => handleTabChange('rilis_token')} className={navButtonClass('rilis_token')} title="Rilis Token">
               <Key size={20} className="shrink-0" /> 
               {!isCollapsed && <span>Rilis Token</span>}
           </button>
-          
+
           {currentUserState.role === 'admin_pusat' && (
-             <>
+              <>
+                <button onClick={() => handleTabChange('manajemen_admin')} className={navButtonClass('manajemen_admin')} title="Manajemen Admin">
+                    <Shield size={20} className="shrink-0" /> 
+                    {!isCollapsed && <span>Manajemen Admin</span>}
+                </button>
+                <button onClick={() => handleTabChange('atur_gelombang')} className={navButtonClass('atur_gelombang')} title="Atur Gelombang">
+                    <Calendar size={20} className="shrink-0" /> 
+                    {!isCollapsed && <span>Atur Gelombang</span>}
+                </button>
+              
                 <div className={`pt-6 pb-2 ${isCollapsed ? 'text-center' : 'pl-6'} text-[10px] font-extrabold text-slate-400 uppercase tracking-widest truncate`}>
                     {isCollapsed ? '---' : 'Laporan & Data'}
                 </div>
@@ -525,7 +532,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     {activeTab === 'atur_sesi' && <AturSesiTab currentUser={currentUserState} students={dashboardData.allUsers || []} refreshData={fetchData} isLoading={isRefreshing} />}
                     {activeTab === 'cetak_absensi' && <CetakAbsensiTab currentUser={currentUserState} students={dashboardData.allUsers || []} />}
                     {activeTab === 'cetak_kartu' && <CetakKartuTab currentUser={currentUserState} students={dashboardData.allUsers || []} schedules={dashboardData.schedules || []} />}
+                    
                     {activeTab === 'data_user' && (currentUserState.role === 'admin_pusat' || currentUserState.role === 'admin_sekolah') && <DaftarPesertaTab currentUser={currentUserState} onDataChange={fetchData} />}
+                    
+                    {activeTab === 'manajemen_admin' && currentUserState.role === 'admin_pusat' && <ManajemenAdminTab currentUser={currentUserState} onDataChange={fetchData} />}
+                    
                     {activeTab === 'atur_gelombang' && currentUserState.role === 'admin_pusat' && <AturGelombangTab students={dashboardData.allUsers || []} />}
                     {activeTab === 'rilis_token' && <RilisTokenTab currentUser={currentUserState} token={dashboardData.token} duration={dashboardData.duration} maxQuestions={dashboardData.maxQuestions} refreshData={fetchData} isRefreshing={isRefreshing} />}
                     {activeTab === 'bank_soal' && currentUserState.role === 'admin_pusat' && <BankSoalTab />}

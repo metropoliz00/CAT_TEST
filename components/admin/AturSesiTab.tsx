@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Clock, Search, Save, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
@@ -22,6 +23,9 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
 
     const filteredStudents = useMemo(() => {
         return students.filter(s => {
+            // FILTER: HANYA ROLE SISWA
+            if (s.role !== 'siswa') return false;
+
             const matchName = s.fullname.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               s.username.toLowerCase().includes(searchTerm.toLowerCase());
             

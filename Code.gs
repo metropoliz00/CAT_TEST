@@ -443,22 +443,51 @@ function adminDeleteQuestion(subject, id) {
 // --- USER MANAGEMENT ---
 
 function getUsers() {
-  const sheet = getSheet(SHEET_USERS);
-  const data = sheet.getDataRange().getDisplayValues();
-  return data.slice(1).map(row => ({
-    id: row[0],
-    username: row[1],
-    password: row[2],
-    role: 'siswa',
-    fullname: row[4],
-    gender: row[5],
-    school: row[6],
-    active_exam: row[7],
-    session: row[8],
-    kecamatan: row[9],
-    photo_url: row[10],
-    status: row[11] || 'OFFLINE'
-  }));
+  const allUsers = [];
+
+  // 1. Fetch Students
+  try {
+    const sheetUsers = getSheet(SHEET_USERS);
+    const dataUsers = sheetUsers.getDataRange().getDisplayValues();
+    const students = dataUsers.slice(1).map(row => ({
+      id: row[0],
+      username: row[1],
+      password: row[2],
+      role: 'siswa',
+      fullname: row[4],
+      gender: row[5],
+      school: row[6],
+      active_exam: row[7],
+      session: row[8],
+      kecamatan: row[9],
+      photo_url: row[10],
+      status: row[11] || 'OFFLINE'
+    }));
+    allUsers.push(...students);
+  } catch (e) { console.error("Error fetching students", e); }
+
+  // 2. Fetch Admins
+  try {
+    const sheetAdmins = getSheet(SHEET_ADMINS);
+    const dataAdmins = sheetAdmins.getDataRange().getDisplayValues();
+    const admins = dataAdmins.slice(1).map(row => ({
+      id: row[0],
+      username: row[1],
+      password: row[2],
+      role: row[3], // 'admin_pusat' or 'admin_sekolah'
+      fullname: row[4],
+      gender: row[5],
+      school: row[6] || '-',
+      active_exam: '-', // Not applicable for admins
+      session: '-',     // Not applicable for admins
+      kecamatan: row[7] || '-',
+      photo_url: row[8] || '',
+      status: 'OFFLINE' // Admins don't track online status in this context
+    }));
+    allUsers.push(...admins);
+  } catch (e) { console.error("Error fetching admins", e); }
+
+  return allUsers;
 }
 
 function adminSaveUser(userData) {

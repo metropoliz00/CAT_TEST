@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Group, Search, Save, Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -28,6 +29,9 @@ const KelompokTesTab = ({ currentUser, students, refreshData }: { currentUser: U
 
     const filteredStudents = useMemo(() => {
         return students.filter(s => {
+            // FILTER: HANYA ROLE SISWA
+            if (s.role !== 'siswa') return false;
+
             const matchName = s.fullname.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               s.username.toLowerCase().includes(searchTerm.toLowerCase());
             

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { School, Users, PlayCircle, CheckCircle2, AlertCircle, Key, Activity, Calendar, MapPin, Clock, Database, BookOpen, UserX, Search, BarChart3, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { User } from '../../types';
@@ -13,24 +14,25 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
     const [kecamatanFilter, setKecamatanFilter] = useState('all');
     const [isMapelOpen, setIsMapelOpen] = useState(true);
 
-    // LOGIC UPDATE: Calculate stats directly from the Users list (User Sheet)
-    // This ensures we are using the 'status' column from the database as the source of truth.
+    // LOGIC UPDATE: Calculate stats ONLY for STUDENTS
     const stats = useMemo(() => {
         let total = 0;
         let counts = { OFFLINE: 0, LOGGED_IN: 0, WORKING: 0, FINISHED: 0 };
 
         const allUsers = dashboardData.allUsers || [];
 
-        // Filter users based on role (School Admin sees only their school)
-        const relevantUsers = currentUserState.role === 'admin_sekolah'
-            ? allUsers.filter((u: any) => (u.school || '').toLowerCase() === (currentUserState.kelas_id || '').toLowerCase())
-            : allUsers;
+        // 1. Filter only STUDENTS
+        let relevantUsers = allUsers.filter((u: any) => u.role === 'siswa');
+
+        // 2. Filter based on Admin School (if applicable)
+        if (currentUserState.role === 'admin_sekolah') {
+            relevantUsers = relevantUsers.filter((u: any) => (u.school || '').toLowerCase() === (currentUserState.kelas_id || '').toLowerCase());
+        }
 
         total = relevantUsers.length;
 
-        // Aggregate status directly from User objects
+        // Aggregate status
         relevantUsers.forEach((u: any) => {
-            // Default to OFFLINE if status is missing/undefined
             const status = (u.status || 'OFFLINE') as keyof typeof counts;
             if (counts[status] !== undefined) {
                 counts[status]++;
@@ -44,7 +46,9 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
 
     const uniqueKecamatans = useMemo(() => {
         if (!dashboardData.allUsers) return [];
-        const kecs = new Set(dashboardData.allUsers.map((u: any) => u.kecamatan).filter((k: any) => k && k !== '-'));
+        // Filter only students for kecamatan list
+        const studentUsers = dashboardData.allUsers.filter((u:any) => u.role === 'siswa');
+        const kecs = new Set(studentUsers.map((u: any) => u.kecamatan).filter((k: any) => k && k !== '-'));
         return Array.from(kecs).sort();
     }, [dashboardData.allUsers]);
 
@@ -53,7 +57,10 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
 
         const schoolMap: Record<string, { name: string, kecamatan: string, total: number, offline: number, login: number, working: number, finished: number }> = {};
 
-        dashboardData.allUsers.forEach((u: any) => {
+        // Only process Students
+        const studentUsers = dashboardData.allUsers.filter((u:any) => u.role === 'siswa');
+
+        studentUsers.forEach((u: any) => {
             const schoolName = u.school || 'Tanpa Sekolah';
             if (!schoolMap[schoolName]) {
                 schoolMap[schoolName] = { 
@@ -100,12 +107,22 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
     
     const filteredFeed = useMemo(() => {
         const feed = dashboardData.activityFeed || [];
+        // Filter feed to show only student activities (usually by checking role in user list, but feed might not have role directly)
+        // We can infer or just show all, but user requested separation.
+        // Assuming feed contains username, we check against allUsers.
+        
+        let validFeed = feed;
+        if (dashboardData.allUsers) {
+             const studentUsernames = new Set(dashboardData.allUsers.filter((u:any) => u.role === 'siswa').map((u:any) => u.username));
+             validFeed = feed.filter((log: any) => studentUsernames.has(log.username));
+        }
+
         if (currentUserState.role === 'admin_sekolah') {
             const mySchool = (currentUserState.kelas_id || '').trim().toLowerCase();
-            return feed.filter((log: any) => (log.school || '').trim().toLowerCase() === mySchool);
+            return validFeed.filter((log: any) => (log.school || '').trim().toLowerCase() === mySchool);
         }
-        return feed;
-    }, [dashboardData.activityFeed, currentUserState]);
+        return validFeed;
+    }, [dashboardData.activityFeed, dashboardData.allUsers, currentUserState]);
 
     const mySchedule = useMemo(() => {
         if (currentUserState.role === 'admin_sekolah' && dashboardData.schedules) {
@@ -117,7 +134,8 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
 
     const uniqueSchoolsCount = useMemo(() => {
         if (!dashboardData.allUsers) return 0;
-        const schools = new Set(dashboardData.allUsers.map((u: any) => u.school).filter((s: any) => s && s !== '-' && s.trim() !== ''));
+        const studentUsers = dashboardData.allUsers.filter((u:any) => u.role === 'siswa');
+        const schools = new Set(studentUsers.map((u: any) => u.school).filter((s: any) => s && s !== '-' && s.trim() !== ''));
         return schools.size;
     }, [dashboardData.allUsers]);
 
@@ -209,7 +227,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
             )}
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
-                <div><p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Total Terdaftar</p><h3 className="text-2xl md:text-3xl font-black text-slate-800 mt-1">{displayTotalUsers}</h3></div>
+                <div><p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">Siswa Terdaftar</p><h3 className="text-2xl md:text-3xl font-black text-slate-800 mt-1">{displayTotalUsers}</h3></div>
                 <div className="bg-slate-100 p-3 rounded-xl text-slate-600"><Users size={28}/></div>
             </div>
             
@@ -272,7 +290,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
-                <h3 className="text-slate-800 font-bold mb-8 text-sm uppercase tracking-wide w-full border-b pb-4">Statistik Peserta</h3>
+                <h3 className="text-slate-800 font-bold mb-8 text-sm uppercase tracking-wide w-full border-b pb-4">Statistik Siswa</h3>
                 <SimpleDonutChart data={statusData} />
                 <div className="grid grid-cols-2 gap-4 mt-8 w-full text-xs font-bold text-slate-500">
                     <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-200 rounded-full"></div> Belum Login ({totalStatus > 0 ? Math.round((OFFLINE/totalStatus)*100) : 0}%)</div>
@@ -283,7 +301,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
             </div>
 
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 col-span-2">
-                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Activity size={20} className="text-blue-600"/> Aktivitas Real-time</h3>
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><Activity size={20} className="text-blue-600"/> Aktivitas Siswa Real-time</h3>
                 <div className="space-y-0 h-[350px] overflow-y-auto custom-scrollbar pr-2">
                     {filteredFeed && filteredFeed.length > 0 ? (
                         filteredFeed.map((log: any, i: number) => {
@@ -365,7 +383,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
                         <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600 border border-indigo-100"><BarChart3 size={20}/></div>
                         <div>
                             <h3 className="font-bold text-slate-800">Statistik Per Sekolah</h3>
-                            <p className="text-xs text-slate-500">Rekapitulasi status peserta berdasarkan sekolah</p>
+                            <p className="text-xs text-slate-500">Rekapitulasi status peserta (Siswa) berdasarkan sekolah</p>
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">

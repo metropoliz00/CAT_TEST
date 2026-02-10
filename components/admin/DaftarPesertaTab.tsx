@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Users, FileText, Download, Upload, Loader2, Plus, Search, Edit, Trash2, X, Camera, Save, User as UserIcon, Check } from 'lucide-react';
 import { api } from '../../services/api';
@@ -9,7 +10,6 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterRole, setFilterRole] = useState('all'); 
     const [filterSchool, setFilterSchool] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -20,13 +20,25 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
     }>({ id: '', username: '', password: '', fullname: '', role: 'siswa', school: '', kecamatan: '', gender: 'L', photo: '', photo_url: '' });
     
     useEffect(() => { loadUsers(); }, []);
-    const loadUsers = async () => { setLoading(true); try { const data = await api.getUsers(); setUsers(data); } catch(e) { console.error(e); } finally { setLoading(false); } };
-    const handleDelete = async (username: string) => { if(!confirm("Yakin ingin menghapus pengguna ini?")) return; setLoading(true); try { await api.deleteUser(username); setUsers(prev => prev.filter(u => u.username !== username)); onDataChange(); } catch (e) { alert("Gagal menghapus user."); } finally { setLoading(false); } };
+    
+    // Only load students here
+    const loadUsers = async () => { 
+        setLoading(true); 
+        try { 
+            const data = await api.getUsers(); 
+            // Filter strictly for students
+            const studentOnly = data.filter((u:any) => u.role === 'siswa');
+            setUsers(studentOnly); 
+        } catch(e) { console.error(e); } 
+        finally { setLoading(false); } 
+    };
+    
+    const handleDelete = async (username: string) => { if(!confirm("Yakin ingin menghapus siswa ini?")) return; setLoading(true); try { await api.deleteUser(username); setUsers(prev => prev.filter(u => u.username !== username)); onDataChange(); } catch (e) { alert("Gagal menghapus user."); } finally { setLoading(false); } };
     
     const handleEdit = (user: any) => { 
         setFormData({ 
             id: user.id, username: user.username, password: user.password, fullname: user.fullname, 
-            role: user.role, school: user.school || '', kecamatan: user.kecamatan || '', gender: user.gender || 'L',
+            role: 'siswa', school: user.school || '', kecamatan: user.kecamatan || '', gender: user.gender || 'L',
             photo: '', photo_url: user.photo_url || ''
         }); 
         setIsModalOpen(true); 
@@ -41,12 +53,33 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
         setIsModalOpen(true); 
     };
     
-    const handleSave = async (e: React.FormEvent) => { e.preventDefault(); setIsSaving(true); try { await api.saveUser(formData); await loadUsers(); setIsModalOpen(false); onDataChange(); } catch (e) { console.error(e); alert("Gagal menyimpan data."); } finally { setIsSaving(false); } };
+    const handleSave = async (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        setIsSaving(true); 
+        try { 
+            // Force role to siswa
+            const payload = { ...formData, role: 'siswa' };
+            await api.saveUser(payload); 
+            await loadUsers(); 
+            setIsModalOpen(false); 
+            onDataChange(); 
+        } catch (e) { console.error(e); alert("Gagal menyimpan data."); } 
+        finally { setIsSaving(false); } 
+    };
+
     const uniqueSchools = useMemo<string[]>(() => { const schools = new Set(users.map(u => u.school).filter(Boolean)); return Array.from(schools).sort() as string[]; }, [users]);
-    const filteredUsers = useMemo(() => { let res = users; if (filterRole !== 'all') res = res.filter(u => u.role === filterRole); if (filterSchool !== 'all') res = res.filter(u => u.school === filterSchool); if (searchTerm) { const lower = searchTerm.toLowerCase(); res = res.filter(u => u.username.toLowerCase().includes(lower) || u.fullname.toLowerCase().includes(lower) || (u.school && u.school.toLowerCase().includes(lower)) || (u.kecamatan && u.kecamatan.toLowerCase().includes(lower))); } if (currentUser.role === 'admin_sekolah') res = res.filter(u => u.role === 'siswa' && (u.school || '').toLowerCase() === (currentUser.kelas_id || '').toLowerCase()); return res; }, [users, filterRole, filterSchool, searchTerm, currentUser]);
-    const handleExport = () => { const dataToExport = filteredUsers.map((u, i) => ({ No: i + 1, Username: u.username, Password: u.password, "Nama Lengkap": u.fullname, Role: u.role, "Jenis Kelamin": u.gender, "Sekolah / Kelas": u.school, "Kecamatan": u.kecamatan || '-' })); exportToExcel(dataToExport, "Data_Pengguna", "Users"); };
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || e.target.files.length === 0) return; setIsImporting(true); const file = e.target.files[0]; const reader = new FileReader(); reader.onload = async (evt) => { try { const bstr = evt.target?.result; const wb = XLSX.read(bstr, { type: 'binary' }); const wsName = wb.SheetNames[0]; const ws = wb.Sheets[wsName]; const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false }); const parsedUsers = []; for (let i = 1; i < data.length; i++) { const row: any = data[i]; if (!row[0]) continue; parsedUsers.push({ username: String(row[0]), password: String(row[1]), role: String(row[2] || 'siswa').toLowerCase(), fullname: String(row[3]), gender: String(row[4] || 'L').toUpperCase(), school: String(row[5] || ''), kecamatan: String(row[6] || ''), photo_url: String(row[7] || '') }); } if (parsedUsers.length > 0) { await api.importUsers(parsedUsers); alert(`Berhasil mengimpor ${parsedUsers.length} pengguna.`); await loadUsers(); onDataChange(); } else { alert("Tidak ada data valid yang ditemukan."); } } catch (err) { console.error(err); alert("Gagal membaca file Excel."); } finally { setIsImporting(false); if (e.target) e.target.value = ''; } }; reader.readAsBinaryString(file); };
-    const downloadTemplate = () => { const ws = XLSX.utils.json_to_sheet([ { "Username": "siswa001", "Password": "123", "Role (siswa/admin_sekolah/admin_pusat)": "siswa", "Nama Lengkap": "Ahmad Siswa", "L/P": "L", "Sekolah / Kelas": "UPT SD Negeri Remen 2", "Kecamatan": "Jenu", "Link Foto (Opsional)": "https://..." }, { "Username": "proktor01", "Password": "123", "Role (siswa/admin_sekolah/admin_pusat)": "admin_sekolah", "Nama Lengkap": "Pak Guru", "L/P": "L", "Sekolah / Kelas": "UPT SD Negeri Glodog", "Kecamatan": "Palang", "Link Foto (Opsional)": "" } ]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template_User"); XLSX.writeFile(wb, "Template_Import_User.xlsx"); };
+    const filteredUsers = useMemo(() => { 
+        let res = users; 
+        if (filterSchool !== 'all') res = res.filter(u => u.school === filterSchool); 
+        if (searchTerm) { const lower = searchTerm.toLowerCase(); res = res.filter(u => u.username.toLowerCase().includes(lower) || u.fullname.toLowerCase().includes(lower) || (u.school && u.school.toLowerCase().includes(lower)) || (u.kecamatan && u.kecamatan.toLowerCase().includes(lower))); } 
+        if (currentUser.role === 'admin_sekolah') res = res.filter(u => (u.school || '').toLowerCase() === (currentUser.kelas_id || '').toLowerCase()); 
+        return res; 
+    }, [users, filterSchool, searchTerm, currentUser]);
+    
+    const handleExport = () => { const dataToExport = filteredUsers.map((u, i) => ({ No: i + 1, Username: u.username, Password: u.password, "Nama Lengkap": u.fullname, Role: u.role, "Jenis Kelamin": u.gender, "Sekolah / Kelas": u.school, "Kecamatan": u.kecamatan || '-' })); exportToExcel(dataToExport, "Data_Siswa", "Users"); };
+    
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || e.target.files.length === 0) return; setIsImporting(true); const file = e.target.files[0]; const reader = new FileReader(); reader.onload = async (evt) => { try { const bstr = evt.target?.result; const wb = XLSX.read(bstr, { type: 'binary' }); const wsName = wb.SheetNames[0]; const ws = wb.Sheets[wsName]; const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false }); const parsedUsers = []; for (let i = 1; i < data.length; i++) { const row: any = data[i]; if (!row[0]) continue; parsedUsers.push({ username: String(row[0]), password: String(row[1]), role: 'siswa', fullname: String(row[3]), gender: String(row[4] || 'L').toUpperCase(), school: String(row[5] || ''), kecamatan: String(row[6] || ''), photo_url: String(row[7] || '') }); } if (parsedUsers.length > 0) { await api.importUsers(parsedUsers); alert(`Berhasil mengimpor ${parsedUsers.length} siswa.`); await loadUsers(); onDataChange(); } else { alert("Tidak ada data valid yang ditemukan."); } } catch (err) { console.error(err); alert("Gagal membaca file Excel."); } finally { setIsImporting(false); if (e.target) e.target.value = ''; } }; reader.readAsBinaryString(file); };
+    const downloadTemplate = () => { const ws = XLSX.utils.json_to_sheet([ { "Username": "siswa001", "Password": "123", "Role (Biarkan Kosong/siswa)": "siswa", "Nama Lengkap": "Ahmad Siswa", "L/P": "L", "Sekolah / Kelas": "UPT SD Negeri Remen 2", "Kecamatan": "Jenu", "Link Foto (Opsional)": "https://..." }]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template_Siswa"); XLSX.writeFile(wb, "Template_Import_Siswa.xlsx"); };
     
     // Handle Image Selection and Compression
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,8 +112,8 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
              {/* Header */}
              <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-slate-100 pb-6">
                  <div>
-                     <h3 className="font-black text-2xl text-slate-800 flex items-center gap-2"><Users size={28} className="text-indigo-600"/> Manajemen Peserta</h3>
-                     <p className="text-slate-400 text-sm font-medium mt-1">Total {filteredUsers.length} pengguna terdaftar.</p>
+                     <h3 className="font-black text-2xl text-slate-800 flex items-center gap-2"><Users size={28} className="text-indigo-600"/> Daftar Siswa (Peserta)</h3>
+                     <p className="text-slate-400 text-sm font-medium mt-1">Total {filteredUsers.length} siswa terdaftar.</p>
                  </div>
                  <div className="flex flex-wrap gap-3">
                     <button onClick={handleExport} className="bg-white text-emerald-600 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-50 transition border-2 border-emerald-100 shadow-sm active:scale-95"><FileText size={16}/> Export Excel</button>
@@ -88,12 +121,12 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                         <>
                         <button onClick={downloadTemplate} className="bg-white text-slate-500 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-50 transition border-2 border-slate-200 active:scale-95"><Download size={16}/> Template</button>
                         <label className={`cursor-pointer bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-emerald-100 transition active:scale-95 ${isImporting ? 'opacity-50 cursor-wait' : ''}`}>
-                            {isImporting ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>} {isImporting ? "Importing..." : "Import User"}
+                            {isImporting ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>} {isImporting ? "Importing..." : "Import Siswa"}
                             <input type="file" accept=".xlsx" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
                         </label>
                         </>
                     )}
-                    <button onClick={handleAdd} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95"><Plus size={16}/> Tambah User</button>
+                    <button onClick={handleAdd} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95"><Plus size={16}/> Tambah Siswa</button>
                  </div>
              </div>
              
@@ -104,10 +137,7 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                     <input type="text" placeholder="Cari Username, Nama, Sekolah..." className="w-full pl-11 pr-4 py-3 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-indigo-500 bg-white font-bold text-slate-600 transition-colors" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </div>
                 {currentUser.role === 'admin_pusat' && (
-                    <>
                     <select className="p-3 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-500 outline-none focus:border-indigo-500 bg-white cursor-pointer hover:border-slate-300 transition-colors appearance-none" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}><option value="all">Semua Sekolah</option>{uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}</select>
-                    <select className="p-3 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-500 outline-none focus:border-indigo-500 bg-white cursor-pointer hover:border-slate-300 transition-colors appearance-none" value={filterRole} onChange={e => setFilterRole(e.target.value)}><option value="all">Semua Role</option><option value="siswa">Siswa</option><option value="admin_sekolah">Proktor</option><option value="admin_pusat">Admin Pusat</option></select>
-                    </>
                 )}
              </div>
 
@@ -136,7 +166,7 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                                     </div>
                                 </div>
                              </td>
-                             <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-extrabold uppercase border ${u.role === 'admin_pusat' ? 'bg-purple-50 text-purple-600 border-purple-100' : u.role === 'admin_sekolah' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{u.role === 'admin_sekolah' ? 'Proktor' : u.role}</span></td>
+                             <td className="p-4"><span className="px-2 py-1 rounded text-[10px] font-extrabold uppercase border bg-slate-100 text-slate-500 border-slate-200">Siswa</span></td>
                              <td className="p-4 text-slate-600 text-xs font-bold">{u.school || '-'}</td>
                              <td className="p-4 text-slate-500 text-xs font-medium">{u.kecamatan || '-'}</td>
                              <td className="p-4 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -153,7 +183,7 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-in">
                      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col border border-white/20 transform scale-100 transition-all">
                          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
-                             <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">{formData.id ? <><Edit size={24} className="text-amber-500"/> Edit Data Pengguna</> : <><Plus size={24} className="text-indigo-500"/> Tambah Pengguna Baru</>}</h3>
+                             <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">{formData.id ? <><Edit size={24} className="text-amber-500"/> Edit Data Siswa</> : <><Plus size={24} className="text-indigo-500"/> Tambah Siswa Baru</>}</h3>
                              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition"><X size={24} className="text-slate-400 hover:text-slate-600"/></button>
                          </div>
                          <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/50">
@@ -173,7 +203,7 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="group">
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Username</label>
-                                            <input required type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} disabled={!!formData.id && formData.role !== 'siswa'} />
+                                            <input required type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} disabled={!!formData.id} />
                                         </div>
                                         <div className="group">
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Password</label>
@@ -187,25 +217,23 @@ const DaftarPesertaTab = ({ currentUser, onDataChange }: { currentUser: User, on
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="group">
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Role</label>
-                                            <select className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all appearance-none" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} disabled={currentUser.role !== 'admin_pusat'}><option value="siswa">Siswa</option><option value="admin_sekolah">Proktor</option><option value="admin_pusat">Admin Pusat</option></select>
+                                            <input type="text" className="w-full p-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed" value="Siswa" disabled />
                                         </div>
                                         <div className="group">
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">L/P</label>
                                             <select className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all appearance-none" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}><option value="L">Laki-laki</option><option value="P">Perempuan</option></select>
                                         </div>
                                     </div>
-                                    {(formData.role === 'siswa' || formData.role === 'admin_sekolah') && (
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="group">
-                                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">{formData.role === 'siswa' ? 'Kelas / Sekolah' : 'Nama Sekolah'}</label>
-                                                <input required type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.school} onChange={e => setFormData({...formData, school: e.target.value})} placeholder="Nama Sekolah" disabled={currentUser.role === 'admin_sekolah'} />
-                                            </div>
-                                            <div className="group">
-                                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Kecamatan</label>
-                                                <input type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.kecamatan} onChange={e => setFormData({...formData, kecamatan: e.target.value})} placeholder="Kecamatan"/>
-                                            </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="group">
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Kelas / Sekolah</label>
+                                            <input required type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.school} onChange={e => setFormData({...formData, school: e.target.value})} placeholder="Nama Sekolah" disabled={currentUser.role === 'admin_sekolah'} />
                                         </div>
-                                    )}
+                                        <div className="group">
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Kecamatan</label>
+                                            <input type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={formData.kecamatan} onChange={e => setFormData({...formData, kecamatan: e.target.value})} placeholder="Kecamatan"/>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="pt-4 flex gap-3">
                                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 border-2 border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-100 hover:text-slate-700 transition">Batal</button>

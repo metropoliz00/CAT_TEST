@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Monitor, Search, PlayCircle, Key, CheckCircle2, RefreshCw, Filter, UserX } from 'lucide-react';
 import { api } from '../../services/api';
@@ -21,6 +22,9 @@ const StatusTesTab = ({ currentUser, students, refreshData }: { currentUser: Use
 
     const filtered = useMemo(() => { 
         return students.filter(s => { 
+            // FILTER: HANYA ROLE SISWA
+            if (s.role !== 'siswa') return false;
+
             const matchName = s.fullname.toLowerCase().includes(searchTerm.toLowerCase()) || s.username.toLowerCase().includes(searchTerm.toLowerCase()); 
             if (currentUser.role === 'admin_sekolah') { 
                 return matchName && (s.school || '').toLowerCase() === (currentUser.kelas_id || '').toLowerCase(); 
