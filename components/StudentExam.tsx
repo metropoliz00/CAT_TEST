@@ -563,11 +563,24 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
       {/* FOOTER CONTROLS */}
       <footer className="bg-white border-t border-slate-200 p-3 md:p-4 z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
         <div className="max-w-[1440px] mx-auto flex justify-between items-center gap-2 md:gap-4">
-          <button onClick={() => setCurrentIdx(p => Math.max(0, p - 1))} disabled={currentIdx === 0 || isSubmitting} className={`px-4 py-3 md:px-6 md:py-3 rounded-xl font-bold flex items-center gap-2 transition-all text-xs md:text-base ${currentIdx === 0 ? 'opacity-0 cursor-default' : 'bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-600 hover:bg-slate-50 active:scale-95'}`}><ChevronLeft size={18} /> <span className="hidden md:inline">SEBELUMNYA</span></button>
+          <button 
+            onClick={() => setCurrentIdx(p => Math.max(0, p - 1))} 
+            disabled={currentIdx === 0 || isSubmitting} 
+            className={`px-4 py-3 md:px-6 md:py-3 rounded-xl font-bold flex items-center gap-2 transition-all transform active:scale-95 text-xs md:text-base 
+            ${currentIdx === 0 
+                ? 'opacity-0 cursor-default' 
+                : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200'}`}
+          >
+            <ChevronLeft size={18} /> <span className="hidden md:inline">SEBELUMNYA</span>
+          </button>
           
-          <label className={`flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-3 rounded-xl border-2 cursor-pointer transition-all select-none group active:scale-95 ${doubtful[currentQ.id] ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-500 hover:border-orange-200 hover:text-orange-600'}`}>
-              <input type="checkbox" className="w-4 h-4 md:w-5 md:h-5 accent-orange-500 rounded cursor-pointer hidden" checked={!!doubtful[currentQ.id]} onChange={() => setDoubtful(p => ({...p, [currentQ.id]: !p[currentQ.id]}))} disabled={isSubmitting} />
-              <Flag size={18} className={doubtful[currentQ.id] ? 'fill-orange-600' : ''} />
+          <label className={`flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-3 rounded-xl cursor-pointer transition-all select-none group active:scale-95 shadow-sm 
+              ${doubtful[currentQ.id] 
+                ? 'bg-yellow-400 text-yellow-900 shadow-yellow-200 ring-2 ring-yellow-400' 
+                : 'bg-white border-2 border-yellow-400 text-yellow-600 hover:bg-yellow-50'}`}
+          >
+              <input type="checkbox" className="hidden" checked={!!doubtful[currentQ.id]} onChange={() => setDoubtful(p => ({...p, [currentQ.id]: !p[currentQ.id]}))} disabled={isSubmitting} />
+              <Flag size={18} className={doubtful[currentQ.id] ? 'fill-yellow-800' : 'fill-none'} />
               <span className="font-bold text-xs md:text-base">RAGU-RAGU</span>
           </label>
           
