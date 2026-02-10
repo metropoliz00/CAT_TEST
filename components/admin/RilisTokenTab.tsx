@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Key, RefreshCw, Save, X, Edit, Clock, Layers, ShieldCheck, Copy } from 'lucide-react';
+import { Key, RefreshCw, Save, X, Edit, Clock, Layers, ShieldCheck, Copy, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api } from '../../services/api';
-import { User } from '../../types';
+import { User, Exam } from '../../types';
 
-const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDuration, refreshData, isRefreshing }: { currentUser: User, token: string, duration: number, maxQuestions: number, surveyDuration: number, refreshData: () => void, isRefreshing: boolean }) => {
-    const [localMaxQ, setLocalMaxQ] = useState(maxQuestions);
-    const [isSavingQ, setIsSavingQ] = useState(false);
+const RilisTokenTab = ({ currentUser, token, duration, refreshData, isRefreshing }: { currentUser: User, token: string, duration: number, maxQuestions: number, refreshData: () => void, isRefreshing: boolean }) => {
     
     // States for Token and Exam Duration editing
     const [tokenInput, setTokenInput] = useState(token);
@@ -13,20 +11,59 @@ const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDurat
     const [durationInput, setDurationInput] = useState(duration);
     const [isEditingDuration, setIsEditingDuration] = useState(false);
 
+    // Per-Subject Configuration State (Batch)
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [examLimits, setExamLimits] = useState<Record<string, number>>({});
+    const [loadingExams, setLoadingExams] = useState(false);
+    const [isSavingSubject, setIsSavingSubject] = useState(false);
+
     const isAdminPusat = currentUser.role === 'admin_pusat';
 
-    useEffect(() => { setLocalMaxQ(maxQuestions); }, [maxQuestions]);
     useEffect(() => { setTokenInput(token); }, [token]);
     useEffect(() => { setDurationInput(duration); }, [duration]);
 
-    const handleSaveMaxQ = async () => {
-        setIsSavingQ(true);
-        try { await api.saveMaxQuestions(Number(localMaxQ)); refreshData(); alert("Konfigurasi tersimpan."); } catch (e) { console.error(e); alert("Gagal menyimpan."); } finally { setIsSavingQ(false); }
+    // Fetch Exams for Subject Config
+    useEffect(() => {
+        const loadExams = async () => {
+            setLoadingExams(true);
+            try {
+                const data = await api.getExams();
+                setExams(data);
+                
+                // Initialize limits dictionary
+                const limits: Record<string, number> = {};
+                data.forEach(e => {
+                    limits[e.id] = e.max_questions || 0;
+                });
+                setExamLimits(limits);
+            } catch (e) {
+                console.error("Gagal memuat mapel", e);
+            } finally {
+                setLoadingExams(false);
+            }
+        };
+        loadExams();
+    }, []);
+
+    const handleLimitChange = (id: string, val: string) => {
+        setExamLimits(prev => ({ ...prev, [id]: Number(val) }));
+    };
+
+    const handleSaveBatchConfig = async () => {
+        setIsSavingSubject(true);
+        try {
+            await api.saveBatchSubjectConfig(examLimits);
+            alert(`Konfigurasi limit soal berhasil disimpan untuk semua mapel.`);
+        } catch (e) {
+            console.error(e);
+            alert("Gagal menyimpan konfigurasi mapel.");
+        } finally {
+            setIsSavingSubject(false);
+        }
     };
 
     const handleUpdateToken = async () => {
-        setIsSavingQ(true);
-        try { await api.saveToken(tokenInput); setIsEditingToken(false); refreshData(); alert("Token berhasil diperbarui."); } catch (e) { alert("Gagal menyimpan token."); } finally { setIsSavingQ(false); }
+        try { await api.saveToken(tokenInput); setIsEditingToken(false); refreshData(); alert("Token berhasil diperbarui."); } catch (e) { alert("Gagal menyimpan token."); }
     };
 
     const generateToken = () => {
@@ -39,8 +76,7 @@ const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDurat
     };
 
     const handleUpdateDuration = async () => {
-        setIsSavingQ(true);
-        try { await api.saveDuration(durationInput); setIsEditingDuration(false); refreshData(); alert("Durasi ujian disimpan."); } catch (e) { alert("Gagal menyimpan durasi."); } finally { setIsSavingQ(false); }
+        try { await api.saveDuration(durationInput); setIsEditingDuration(false); refreshData(); alert("Durasi ujian disimpan."); } catch (e) { alert("Gagal menyimpan durasi."); }
     };
 
     return (
@@ -51,7 +87,7 @@ const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDurat
                     <ShieldCheck size={12} /> Secure Exam Control
                 </div>
                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">Panel Kontrol Ujian</h2>
-                <p className="text-slate-400 font-medium text-sm">Kelola akses dan konfigurasi waktu ujian secara real-time.</p>
+                <p className="text-slate-400 font-medium text-sm">Kelola token akses dan konfigurasi soal per mata pelajaran.</p>
             </div>
 
             {/* Main Cards Container - White Soft Aesthetic */}
@@ -104,7 +140,7 @@ const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDurat
                     
                     <div className="flex justify-between items-start mb-6 relative z-10">
                         <div className="flex items-center gap-2 text-slate-400 font-extrabold uppercase text-[10px] tracking-widest">
-                             <span className="p-2 bg-slate-50 rounded-xl"><Clock size={14}/></span> Durasi Ujian
+                             <span className="p-2 bg-slate-50 rounded-xl"><Clock size={14}/></span> Durasi Ujian Global
                         </div>
                         {isAdminPusat && !isEditingDuration && (
                             <button onClick={()=>setIsEditingDuration(true)} className="text-slate-400 hover:text-indigo-600 p-2 rounded-full hover:bg-slate-50 transition"><Edit size={16}/></button>
@@ -126,27 +162,77 @@ const RilisTokenTab = ({ currentUser, token, duration, maxQuestions, surveyDurat
                         ) : (
                             <>
                                 <h3 className="text-7xl font-black text-slate-800 tracking-tighter">{duration}<span className="text-2xl text-slate-300 font-bold ml-1 align-top">m</span></h3>
-                                <p className="text-xs text-slate-400 mt-2 font-medium bg-slate-50 py-2 px-4 rounded-full inline-block">Alokasi Waktu Pengerjaan</p>
+                                <p className="text-xs text-slate-400 mt-2 font-medium bg-slate-50 py-2 px-4 rounded-full inline-block">Default Waktu Pengerjaan</p>
                             </>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* Config Panels */}
+            {/* Subject Config Panel (Updated for Batch Edit) */}
             {isAdminPusat && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between hover:border-slate-200 transition-colors col-span-2">
-                    <div>
-                        <h4 className="font-bold text-slate-700 flex items-center gap-2 text-sm"><Layers size={18} className="text-slate-400"/> Limit Soal</h4>
-                        <p className="text-[10px] text-slate-400 mt-1 font-medium">Batasi jumlah soal yang tampil.</p>
+                <div className="w-full max-w-4xl bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-6 opacity-[0.03]">
+                        <Layers size={150} className="text-slate-900"/>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <input type="number" className="w-16 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-center text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-50 transition-all text-slate-700" value={localMaxQ} onChange={(e) => setLocalMaxQ(Number(e.target.value))} placeholder="0"/>
-                        <button onClick={handleSaveMaxQ} disabled={isSavingQ || localMaxQ == maxQuestions} className="p-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 disabled:bg-slate-100 disabled:text-slate-300 transition shadow-lg"><Save size={16}/></button>
+
+                    <div className="flex justify-between items-center mb-6 relative z-10">
+                        <div className="flex gap-4 items-center">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-sm">
+                                <Layers size={24}/>
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-lg">Konfigurasi Batas Soal</h4>
+                                <p className="text-xs text-slate-400 font-medium">Tentukan jumlah soal yang tampil untuk setiap mata pelajaran.</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleSaveBatchConfig} 
+                            disabled={isSavingSubject}
+                            className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold text-xs"
+                        >
+                            {isSavingSubject ? <RefreshCw size={16} className="animate-spin"/> : <Save size={16}/>} Simpan Konfigurasi
+                        </button>
+                    </div>
+
+                    <div className="relative z-10 bg-slate-50 rounded-xl border border-slate-100 p-1">
+                        {loadingExams ? (
+                            <div className="p-8 text-center text-slate-400 flex flex-col items-center gap-2">
+                                <RefreshCw className="animate-spin"/> Memuat Daftar Mapel...
+                            </div>
+                        ) : exams.length === 0 ? (
+                            <div className="p-8 text-center text-slate-400">Belum ada mata pelajaran.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+                                {exams.map(exam => (
+                                    <div key={exam.id} className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between group hover:border-blue-200 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs border border-blue-100">
+                                                {exam.nama_ujian.charAt(0)}
+                                            </div>
+                                            <span className="font-bold text-slate-700 text-sm truncate max-w-[100px]" title={exam.nama_ujian}>{exam.nama_ujian}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="number" 
+                                                className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                                                value={examLimits[exam.id]}
+                                                onChange={(e) => handleLimitChange(exam.id, e.target.value)}
+                                                placeholder="0"
+                                            />
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">Soal</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-2 text-[10px] text-slate-400 font-medium bg-white border border-slate-100 p-3 rounded-xl w-fit">
+                        <AlertCircle size={14} className="text-orange-400"/>
+                        <span>Info: Isi <b>0</b> untuk menampilkan semua soal yang tersedia di Bank Soal.</span>
                     </div>
                 </div>
-            </div>
             )}
 
             <button onClick={refreshData} disabled={isRefreshing} className={`bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 px-8 py-3 rounded-full font-bold text-xs transition-all shadow-sm hover:shadow-md flex items-center gap-2 ${isRefreshing ? 'opacity-50 cursor-wait' : ''}`}>

@@ -1,7 +1,7 @@
 import { User, Exam, QuestionWithOptions, QuestionRow, SchoolSchedule } from '../types';
 
 // The Apps Script Web App URL provided
-const GAS_EXEC_URL = "https://script.google.com/macros/s/AKfycbzz0der1_aP1x4LbvxiUGb0ZHGUEFKoNC94Z7MhNOd9SYSybY_yhrboyA9o1vWA1Bge/exec";
+const GAS_EXEC_URL = "https://script.google.com/macros/s/AKfycbw54-vcXoUvBQTefh61MCpS8-4NUK0-Fql5YPtSBY1f8vrnntlD-5mzdN8M7ax28qtN/exec";
 
 // Check if running inside GAS iframe
 const isEmbedded = typeof window !== 'undefined' && window.google && window.google.script;
@@ -99,28 +99,32 @@ export const api = {
 
   getExams: async (): Promise<Exam[]> => {
     const response: any = await callBackend('getSubjectList');
-    let subjects: string[] = [];
+    let subjects: any[] = [];
     let duration = 60;
-    let maxQuestions = 0;
-
+    
+    // Parse response structure
     if (Array.isArray(response)) {
-        subjects = response;
+        subjects = response; // Legacy: just strings
     } else if (response && response.subjects) {
         subjects = response.subjects;
         duration = response.duration || 60;
-        maxQuestions = response.maxQuestions || 0;
     }
 
     if (subjects.length > 0) {
-        return subjects.map((s) => ({
-            id: s,
-            nama_ujian: s,
-            waktu_mulai: new Date().toISOString(),
-            durasi: Number(duration),
-            token_akses: 'TOKEN', 
-            is_active: true,
-            max_questions: Number(maxQuestions)
-        }));
+        return subjects.map((s) => {
+            const name = typeof s === 'string' ? s : s.name;
+            const limit = typeof s === 'object' && s.limit !== undefined ? s.limit : 0;
+            
+            return {
+                id: name,
+                nama_ujian: name,
+                waktu_mulai: new Date().toISOString(),
+                durasi: Number(duration),
+                token_akses: 'TOKEN', 
+                is_active: true,
+                max_questions: Number(limit)
+            };
+        });
     }
     return [];
   },
@@ -137,12 +141,16 @@ export const api = {
       return await callBackend('saveConfig', 'DURATION', minutes);
   },
 
-  saveSurveyDuration: async (minutes: number): Promise<{success: boolean}> => {
-      return await callBackend('saveConfig', 'SURVEY_DURATION', minutes);
-  },
-
   saveMaxQuestions: async (amount: number): Promise<{success: boolean}> => {
       return await callBackend('saveConfig', 'MAX_QUESTIONS', amount);
+  },
+  
+  saveSubjectConfig: async (subject: string, maxQuestions: number): Promise<{success: boolean}> => {
+      return await callBackend('saveSubjectConfig', subject, maxQuestions);
+  },
+
+  saveBatchSubjectConfig: async (configMap: Record<string, number>): Promise<{success: boolean}> => {
+      return await callBackend('saveBatchSubjectConfig', configMap);
   },
 
   getQuestions: async (subject: string): Promise<QuestionWithOptions[]> => {
@@ -156,6 +164,7 @@ export const api = {
         tipe_soal: q.type || 'PG',
         bobot_nilai: 10,
         gambar: q.image || undefined,
+        keterangan_gambar: q.caption || undefined, // Map caption from backend
         options: Array.isArray(q.options) ? q.options.map((o: any, idx: number) => ({
             id: o.id || `opt-${i}-${idx}`,
             question_id: q.id || `Q${i+1}`,
@@ -163,10 +172,6 @@ export const api = {
             is_correct: false 
         })) : []
     }));
-  },
-
-  getSurveyQuestions: async (surveyType: string): Promise<QuestionWithOptions[]> => {
-      return await api.getQuestions(surveyType);
   },
 
   getRawQuestions: async (subject: string): Promise<QuestionRow[]> => {
@@ -234,11 +239,6 @@ export const api = {
       return Array.isArray(res) ? res : [];
   },
 
-  getSurveyRecap: async (surveyType: string): Promise<any[]> => {
-      const res = await callBackend('getSurveyRecap', surveyType);
-      return Array.isArray(res) ? res : [];
-  },
-
   getAnalysis: async (subject: string): Promise<any> => {
       return await callBackend('getAnalysisData', subject);
   },
@@ -256,18 +256,6 @@ export const api = {
           payload.startTime, 
           payload.displayedQuestionCount || 0, 
           payload.questionIds || [] 
-      );
-  },
-
-  submitSurvey: async (payload: { user: User, surveyType: string, answers: any, startTime: number }) => {
-      return await callBackend(
-          'submitSurvey', 
-          payload.user.username, 
-          payload.user.nama_lengkap, 
-          payload.user.kelas_id, 
-          payload.surveyType, 
-          payload.answers, 
-          payload.startTime
       );
   },
   

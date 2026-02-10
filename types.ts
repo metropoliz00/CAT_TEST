@@ -1,7 +1,4 @@
 
-
-
-
 // 1. Tabel Users
 export interface User {
   id: string;
@@ -15,6 +12,7 @@ export interface User {
   active_exam?: string; // Assigned Exam
   session?: string; // Assigned Session
   photo_url?: string; // New Field: Profile Photo URL
+  status?: string; // New Field: Online Status (OFFLINE/LOGGED_IN/WORKING/FINISHED)
 }
 
 // 2. Tabel Exams (Ujian)
@@ -29,13 +27,15 @@ export interface Exam {
 }
 
 // 3. Tabel Questions (Bank Soal)
-export type QuestionType = 'PG' | 'PGK' | 'BS' | 'LIKERT';
+// Removed 'LIKERT'
+export type QuestionType = 'PG' | 'PGK' | 'BS';
 
 export interface Question {
   id: string;
   exam_id: string;
   text_soal: string;
   gambar?: string;
+  keterangan_gambar?: string; // New Field: Image Caption
   tipe_soal: QuestionType;
   bobot_nilai: number;
 }
@@ -46,6 +46,7 @@ export interface QuestionRow {
   text_soal: string;
   tipe_soal: QuestionType;
   gambar: string;
+  keterangan_gambar?: string; // New Field
   opsi_a: string;
   opsi_b: string;
   opsi_c: string;

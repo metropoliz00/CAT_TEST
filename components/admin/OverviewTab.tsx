@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { School, Users, PlayCircle, CheckCircle2, AlertCircle, Key, Activity, Calendar, MapPin, Clock, Database, BookOpen, UserX, Search, BarChart3, Filter } from 'lucide-react';
+import { School, Users, PlayCircle, CheckCircle2, AlertCircle, Key, Activity, Calendar, MapPin, Clock, Database, BookOpen, UserX, Search, BarChart3, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { User } from '../../types';
 import { SimpleDonutChart } from '../../utils/adminHelpers';
 
@@ -11,41 +11,43 @@ interface OverviewTabProps {
 const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserState }) => {
     const [schoolSearch, setSchoolSearch] = useState('');
     const [kecamatanFilter, setKecamatanFilter] = useState('all');
+    const [isMapelOpen, setIsMapelOpen] = useState(true);
 
+    // LOGIC UPDATE: Calculate stats directly from the Users list (User Sheet)
+    // This ensures we are using the 'status' column from the database as the source of truth.
     const stats = useMemo(() => {
-        let counts = dashboardData.statusCounts || { OFFLINE: 0, LOGGED_IN: 0, WORKING: 0, FINISHED: 0 };
-        // FIX: Ensure total is calculated from actual user array length to be accurate
-        let total = (dashboardData.allUsers || []).length;
+        let total = 0;
+        let counts = { OFFLINE: 0, LOGGED_IN: 0, WORKING: 0, FINISHED: 0 };
 
-        if (currentUserState.role === 'admin_sekolah') {
-            const mySchool = (currentUserState.kelas_id || '').toLowerCase();
-            const schoolUsers = (dashboardData.allUsers || []).filter((u: any) => 
-                (u.school || '').toLowerCase() === mySchool
-            );
-            
-            const localCounts = { OFFLINE: 0, LOGGED_IN: 0, WORKING: 0, FINISHED: 0 };
-            schoolUsers.forEach((u: any) => {
-                const status = u.status as keyof typeof localCounts;
-                if (localCounts[status] !== undefined) {
-                    localCounts[status]++;
-                }
-            });
+        const allUsers = dashboardData.allUsers || [];
 
-            counts = localCounts;
-            total = schoolUsers.length;
-        }
+        // Filter users based on role (School Admin sees only their school)
+        const relevantUsers = currentUserState.role === 'admin_sekolah'
+            ? allUsers.filter((u: any) => (u.school || '').toLowerCase() === (currentUserState.kelas_id || '').toLowerCase())
+            : allUsers;
+
+        total = relevantUsers.length;
+
+        // Aggregate status directly from User objects
+        relevantUsers.forEach((u: any) => {
+            // Default to OFFLINE if status is missing/undefined
+            const status = (u.status || 'OFFLINE') as keyof typeof counts;
+            if (counts[status] !== undefined) {
+                counts[status]++;
+            } else {
+                counts['OFFLINE']++;
+            }
+        });
 
         return { counts, total };
-    }, [dashboardData, currentUserState]);
+    }, [dashboardData.allUsers, currentUserState]);
 
-    // Extract Unique Kecamatans for Filter
     const uniqueKecamatans = useMemo(() => {
         if (!dashboardData.allUsers) return [];
         const kecs = new Set(dashboardData.allUsers.map((u: any) => u.kecamatan).filter((k: any) => k && k !== '-'));
         return Array.from(kecs).sort();
     }, [dashboardData.allUsers]);
 
-    // Calculate Stats Per School for Admin Pusat
     const schoolStats = useMemo(() => {
         if (currentUserState.role !== 'admin_pusat' || !dashboardData.allUsers) return [];
 
@@ -72,12 +74,10 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
 
         let results = Object.values(schoolMap).sort((a, b) => b.total - a.total);
 
-        // Apply Kecamatan Filter
         if (kecamatanFilter !== 'all') {
             results = results.filter(s => (s.kecamatan || '').toLowerCase() === kecamatanFilter.toLowerCase());
         }
 
-        // Apply Search Filter
         if (schoolSearch) {
             const lowerSearch = schoolSearch.toLowerCase();
             results = results.filter(s => s.name.toLowerCase().includes(lowerSearch));
@@ -89,8 +89,6 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
     const { OFFLINE, LOGGED_IN, WORKING, FINISHED } = stats.counts;
     const displayTotalUsers = stats.total;
     const totalStatus = OFFLINE + LOGGED_IN + WORKING + FINISHED;
-    
-    // Duration Calculation
     const examDuration = Number(dashboardData.duration) || 0;
     
     const statusData = [
@@ -128,17 +126,25 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
         const parts = dateStr.split('-');
         if (parts.length === 3) {
             const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-            return date.toLocaleDateString('id-ID', { 
-                weekday: 'long', 
-                day: 'numeric', 
-                month: 'long', 
-                year: 'numeric' 
-            });
+            return date.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         }
         return dateStr;
     };
 
-    const dbSubjects = dashboardData.subjects || [];
+    const dbSubjects = useMemo(() => {
+        const subjects = dashboardData.subjects || [];
+        const priority = ["Matematika", "IPA", "IPS"];
+        
+        return [...subjects].sort((a: any, b: any) => {
+            const idxA = priority.indexOf(a.name);
+            const idxB = priority.indexOf(b.name);
+            
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [dashboardData.subjects]);
 
     return (
     <div className="space-y-6 fade-in max-w-7xl mx-auto">
@@ -222,34 +228,45 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ dashboardData, currentUserSta
             </div>
         </div>
 
-        {/* Database Subject Status Section */}
+        {/* Database Subject Status Section (Collapsible) */}
         {currentUserState.role === 'admin_pusat' && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex items-center gap-2 mb-4 border-b border-slate-50 pb-2">
-                    <Database size={18} className="text-indigo-600"/>
-                    <h4 className="font-bold text-slate-700 text-sm">Status Database Mata Pelajaran</h4>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {dbSubjects.length > 0 ? (
-                        dbSubjects.map((sub: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white p-2 rounded-lg border border-slate-200 text-indigo-600"><BookOpen size={16}/></div>
-                                    <div>
-                                        <p className="text-xs font-bold text-slate-800">{sub.name}</p>
-                                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Tersinkronisasi</p>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <button 
+                    onClick={() => setIsMapelOpen(!isMapelOpen)}
+                    className="w-full flex items-center justify-between p-6 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                    <div className="flex items-center gap-2">
+                        <Database size={18} className="text-indigo-600"/>
+                        <h4 className="font-bold text-slate-700 text-sm">Status Database Mata Pelajaran</h4>
+                    </div>
+                    {isMapelOpen ? <ChevronUp size={20} className="text-slate-400"/> : <ChevronDown size={20} className="text-slate-400"/>}
+                </button>
+                
+                {isMapelOpen && (
+                    <div className="p-6 pt-0 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-50 pt-4">
+                            {dbSubjects.length > 0 ? (
+                                dbSubjects.map((sub: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-white p-2 rounded-lg border border-slate-200 text-indigo-600"><BookOpen size={16}/></div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800">{sub.name}</p>
+                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Tersinkronisasi</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-lg font-black text-slate-700">{sub.count}</p>
+                                            <p className="text-[9px] text-slate-400 font-bold">Soal</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-lg font-black text-slate-700">{sub.count}</p>
-                                    <p className="text-[9px] text-slate-400 font-bold">Soal</p>
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-3 text-center text-slate-400 text-xs italic py-4">Memeriksa ketersediaan database mapel...</div>
-                    )}
-                </div>
+                                ))
+                            ) : (
+                                <div className="col-span-3 text-center text-slate-400 text-xs italic py-4">Memeriksa ketersediaan database mapel...</div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         )}
 

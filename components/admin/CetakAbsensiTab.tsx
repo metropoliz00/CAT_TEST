@@ -40,6 +40,17 @@ const CetakAbsensiTab = ({ currentUser, students }: { currentUser: User, student
         });
     }, [students, currentUser, filterSchool, filterKecamatan, selectedSession]);
 
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setFilterSchool(val);
+        if (val !== 'all') {
+            const sample = students.find(s => s.school === val);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
+
     const handlePrint = () => {
         if (filteredStudents.length === 0) return alert("Tidak ada data siswa untuk dicetak.");
 
@@ -182,7 +193,7 @@ const CetakAbsensiTab = ({ currentUser, students }: { currentUser: User, student
                         </div>
                         <div>
                             <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Filter Sekolah</label>
-                            <select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}>
+                            <select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}>
                                 <option value="all">Semua Sekolah</option>
                                 {uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>

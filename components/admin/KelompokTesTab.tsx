@@ -61,6 +61,17 @@ const KelompokTesTab = ({ currentUser, students, refreshData }: { currentUser: U
         else setSelectedUsers(new Set());
     };
 
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const school = e.target.value;
+        setFilterSchool(school);
+        if (school !== 'all') {
+            const sample = students.find(s => s.school === school);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
             <h3 className="font-bold text-lg mb-6 flex items-center gap-2 text-slate-700"><Group size={20}/> Kelompok Tes (Set Ujian Aktif)</h3>
@@ -93,7 +104,7 @@ const KelompokTesTab = ({ currentUser, students, refreshData }: { currentUser: U
                             <select 
                                 className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100"
                                 value={filterSchool}
-                                onChange={e => setFilterSchool(e.target.value)}
+                                onChange={handleSchoolChange}
                             >
                                 <option value="all">Semua Sekolah</option>
                                 {uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}

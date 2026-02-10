@@ -49,6 +49,17 @@ const RekapTab = ({ students }: { students: any[] }) => {
         });
     }, [data, filterSchool, filterKecamatan, filterSubject, userMap]);
 
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setFilterSchool(val);
+        if (val !== 'all') {
+            const sample = students.find(s => s.school === val);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -65,7 +76,7 @@ const RekapTab = ({ students }: { students: any[] }) => {
                         <option value="all">Semua Kecamatan</option>
                         {uniqueKecamatans.map((s:any) => <option key={s} value={s}>{s}</option>)}
                      </select>
-                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}>
+                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}>
                         <option value="all">Semua Sekolah</option>
                         {uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}
                      </select>

@@ -147,8 +147,8 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
   const [timeLeft, setTimeLeft] = useState(() => {
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - startTime) / 1000);
-    const totalDurationSeconds = exam.durasi * 60;
-    return Math.max(0, totalDurationSeconds - elapsedSeconds);
+    const totalSeconds = exam.durasi * 60;
+    return Math.max(0, totalSeconds - elapsedSeconds);
   });
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -160,6 +160,9 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
   const [isLocked, setIsLocked] = useState(true);
   const [violationCount, setViolationCount] = useState(0);
   const MAX_VIOLATIONS = 3;
+
+  // OSN Logo URL (Same as Login)
+  const logoUrl = "https://image2url.com/r2/default/images/1770216884638-0a7493fe-7dc5-4bde-8900-68d7b163679a.png";
 
   const storageKey = `cbt_answers_${username}_${exam.id}`;
 
@@ -327,6 +330,7 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
   };
 
   const isLastQuestion = currentIdx === examQuestions.length - 1;
+  const isTwoColumn = currentQ.gambar || currentQ.tipe_soal === 'BS';
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans overflow-hidden select-none touch-manipulation">
@@ -355,12 +359,14 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
       {/* HEADER */}
       <header className="h-16 md:h-18 bg-white/95 backdrop-blur shadow-md border-b border-blue-600 flex justify-between items-center px-4 md:px-8 z-40 sticky top-0">
         <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-600 to-red-600 text-white p-2 rounded-xl shadow-lg">
-                <Monitor size={20} />
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100 p-1 shrink-0 overflow-hidden">
+                 <img src={logoUrl} className="w-full h-full object-contain" alt="Logo" />
             </div>
             <div className="block">
-                {/* Responsive Header Text */}
-                <h1 className="font-black text-slate-800 text-xs md:text-lg leading-none tracking-tight">COMPUTER ASSESMENT TEST</h1>
+                {/* Responsive Header Text with Theme Colors */}
+                <h1 className="text-xs md:text-lg font-black tracking-tight leading-none">
+                    <span className="text-slate-900">OLIMPIADE</span> <span className="text-red-600">SAINS</span> <span className="text-blue-600">NASIONAL</span>
+                </h1>
                 <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden md:block">Secure Exam Browser</p>
             </div>
         </div>
@@ -393,7 +399,7 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
       {/* CONTENT AREA */}
       <div className="flex flex-1 overflow-hidden relative">
         <main className="flex-1 overflow-y-auto p-3 md:p-8 pb-32 w-full bg-slate-50">
-          <div className="max-w-5xl mx-auto bg-white rounded-[1.5rem] shadow-xl border border-slate-200 min-h-[600px] flex flex-col overflow-hidden relative">
+          <div className="max-w-[1440px] mx-auto bg-white rounded-[1.5rem] shadow-xl border border-slate-200 min-h-[600px] flex flex-col overflow-hidden relative">
             
             {/* Top Info Bar */}
             <div className="flex justify-between items-center p-4 md:p-5 border-b border-slate-100 bg-white sticky top-0 z-10">
@@ -401,6 +407,7 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
                 <span className="bg-blue-600 text-white text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg shadow-blue-200 shadow-md">No. {currentIdx + 1}</span>
                 {exam.max_questions && <span className="text-[10px] md:text-xs font-bold text-slate-400">dari {exam.max_questions} Soal</span>}
                 {currentQ.tipe_soal === 'PGK' && <span className="text-[10px] md:text-xs text-red-600 font-bold bg-red-50 px-2 md:px-3 py-1 rounded-full border border-red-100">Pilih Jawaban &gt; 1</span>}
+                {currentQ.tipe_soal === 'BS' && <span className="text-[10px] md:text-xs text-emerald-600 font-bold bg-emerald-50 px-2 md:px-3 py-1 rounded-full border border-emerald-100">Benar / Salah</span>}
               </div>
               <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                 {(['sm', 'md', 'lg'] as const).map(s => (<button key={s} onClick={() => setFontSize(s)} className={`w-8 h-8 flex items-center justify-center rounded-md text-xs font-bold transition ${fontSize === s ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>A{s === 'lg' ? '+' : s === 'sm' ? '-' : ''}</button>))}
@@ -409,27 +416,53 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
 
             {/* Question Body with Responsive Padding */}
             <div className={`p-4 md:p-10 flex-1 ${fontSize === 'sm' ? 'text-sm' : fontSize === 'lg' ? 'text-lg md:text-xl' : 'text-base'} text-slate-800 leading-relaxed`}>
-              <div className={currentQ.gambar ? "grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10 items-start" : "w-full flex flex-col gap-8"}>
+              <div className={isTwoColumn ? "grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-start" : "w-full flex flex-col gap-8"}>
                 
-                {/* Image Section */}
-                {currentQ.gambar && (
-                    <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 flex flex-col items-center justify-center min-h-[200px] md:min-h-[300px] relative group overflow-hidden shadow-inner">
-                        <div className="relative cursor-zoom-in w-full h-full flex items-center justify-center" onClick={() => setZoomedImage(currentQ.gambar!)}>
-                            <img src={currentQ.gambar} alt="Soal" className="max-w-full h-auto rounded-xl shadow-sm max-h-[300px] md:max-h-[450px] object-contain transition-transform duration-300 group-hover:scale-[1.02]" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center rounded-xl">
-                                <div className="bg-white/90 backdrop-blur text-slate-800 px-4 py-2 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-4 group-hover:translate-y-0 flex items-center gap-2 shadow-lg">
-                                    <Maximize size={14} /> Perbesar Gambar
-                                </div>
+                {/* LEFT COLUMN: Image OR Question Text (for BS) */}
+                <div className={isTwoColumn ? "flex flex-col gap-6" : "hidden"}>
+                    {/* If Image Exists -> Show Image */}
+                    {currentQ.gambar && (
+                        <div className="flex flex-col gap-3">
+                          <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 flex flex-col items-center justify-center min-h-[200px] md:min-h-[300px] relative group overflow-hidden shadow-inner">
+                              <div className="relative cursor-zoom-in w-full h-full flex items-center justify-center" onClick={() => setZoomedImage(currentQ.gambar!)}>
+                                  <img src={currentQ.gambar} alt="Soal" className="max-w-full h-auto rounded-xl shadow-sm max-h-[300px] md:max-h-[450px] object-contain transition-transform duration-300 group-hover:scale-[1.02]" />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center rounded-xl">
+                                      <div className="bg-white/90 backdrop-blur text-slate-800 px-4 py-2 rounded-full text-xs font-bold opacity-0 group-hover:opacity-100 transition-all transform translate-y-4 group-hover:translate-y-0 flex items-center gap-2 shadow-lg">
+                                          <Maximize size={14} /> Perbesar Gambar
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                          
+                          {/* Image Caption Display */}
+                          {currentQ.keterangan_gambar && (
+                            <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 text-center">
+                               <p className="text-blue-600 font-medium italic text-sm leading-snug">
+                                 {currentQ.keterangan_gambar}
+                               </p>
                             </div>
+                          )}
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Text & Options Section */}
+                    {/* If No Image BUT is BS -> Show Question Text Here (Left Side) */}
+                    {!currentQ.gambar && currentQ.tipe_soal === 'BS' && (
+                         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm h-full">
+                             <div className="font-medium whitespace-pre-wrap text-justify leading-relaxed">
+                                {currentQ.text_soal}
+                             </div>
+                         </div>
+                    )}
+                </div>
+
+                {/* RIGHT COLUMN (or Single Column): Text Soal + Options */}
                 <div className="flex flex-col gap-6 md:gap-8 w-full">
-                    <div className="font-medium whitespace-pre-wrap text-justify">{currentQ.text_soal}</div>
+                    {/* Show Text Soal here IF (Single Column) OR (Two Column AND Image Exists) */}
+                    {(!isTwoColumn || (isTwoColumn && currentQ.gambar)) && (
+                        <div className="font-medium whitespace-pre-wrap text-justify leading-relaxed">{currentQ.text_soal}</div>
+                    )}
                     
-                    {/* Options */}
+                    {/* Options Section */}
                     <div className="space-y-3 md:space-y-4">
                         {currentQ.tipe_soal === 'PG' && currentQ.options.map((opt, idx) => {
                         const isSelected = answers[currentQ.id] === opt.id;
@@ -462,13 +495,13 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
                         })}
 
                         {currentQ.tipe_soal === 'BS' && (
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm mt-2 overflow-x-auto">
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm mt-2 overflow-x-auto bg-white">
                                 <table className="w-full text-xs md:text-sm text-left">
                                     <thead className="bg-slate-50 text-slate-700 font-bold uppercase text-[10px] md:text-xs">
                                         <tr>
                                             <th className="p-3 md:p-4">Pernyataan</th>
-                                            <th className="p-3 md:p-4 w-16 md:w-24 text-center text-emerald-600">Benar</th>
-                                            <th className="p-3 md:p-4 w-16 md:w-24 text-center text-red-600">Salah</th>
+                                            <th className="p-3 md:p-4 w-16 md:w-24 text-center text-emerald-600 bg-emerald-50/50 border-l border-slate-100">Benar</th>
+                                            <th className="p-3 md:p-4 w-16 md:w-24 text-center text-red-600 bg-red-50/50 border-l border-slate-100">Salah</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -477,8 +510,8 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
                                             return (
                                                 <tr key={opt.id} className="hover:bg-slate-50 transition">
                                                     <td className="p-3 md:p-4 font-medium text-slate-800"><OptionContent text={opt.text_jawaban} onZoom={setZoomedImage} /></td>
-                                                    <td className="p-3 md:p-4 text-center"><label className="cursor-pointer block h-full w-full flex justify-center"><input type="radio" name={`bs-${opt.id}`} className="w-5 h-5 md:w-6 md:h-6 accent-emerald-500 cursor-pointer" checked={val === true} onChange={() => handleAnswer(true, 'BS', opt.id)} /></label></td>
-                                                    <td className="p-3 md:p-4 text-center"><label className="cursor-pointer block h-full w-full flex justify-center"><input type="radio" name={`bs-${opt.id}`} className="w-5 h-5 md:w-6 md:h-6 accent-red-500 cursor-pointer" checked={val === false} onChange={() => handleAnswer(false, 'BS', opt.id)} /></label></td>
+                                                    <td className="p-3 md:p-4 text-center border-l border-slate-100"><label className="cursor-pointer block h-full w-full flex justify-center py-2"><input type="radio" name={`bs-${opt.id}`} className="w-5 h-5 md:w-6 md:h-6 accent-emerald-500 cursor-pointer" checked={val === true} onChange={() => handleAnswer(true, 'BS', opt.id)} /></label></td>
+                                                    <td className="p-3 md:p-4 text-center border-l border-slate-100"><label className="cursor-pointer block h-full w-full flex justify-center py-2"><input type="radio" name={`bs-${opt.id}`} className="w-5 h-5 md:w-6 md:h-6 accent-red-500 cursor-pointer" checked={val === false} onChange={() => handleAnswer(false, 'BS', opt.id)} /></label></td>
                                                 </tr>
                                             ); 
                                         })}
@@ -529,7 +562,7 @@ const StudentExam: React.FC<StudentExamProps> = ({ exam, questions, userFullName
 
       {/* FOOTER CONTROLS */}
       <footer className="bg-white border-t border-slate-200 p-3 md:p-4 z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        <div className="max-w-5xl mx-auto flex justify-between items-center gap-2 md:gap-4">
+        <div className="max-w-[1440px] mx-auto flex justify-between items-center gap-2 md:gap-4">
           <button onClick={() => setCurrentIdx(p => Math.max(0, p - 1))} disabled={currentIdx === 0 || isSubmitting} className={`px-4 py-3 md:px-6 md:py-3 rounded-xl font-bold flex items-center gap-2 transition-all text-xs md:text-base ${currentIdx === 0 ? 'opacity-0 cursor-default' : 'bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-600 hover:bg-slate-50 active:scale-95'}`}><ChevronLeft size={18} /> <span className="hidden md:inline">SEBELUMNYA</span></button>
           
           <label className={`flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-3 rounded-xl border-2 cursor-pointer transition-all select-none group active:scale-95 ${doubtful[currentQ.id] ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-500 hover:border-orange-200 hover:text-orange-600'}`}>

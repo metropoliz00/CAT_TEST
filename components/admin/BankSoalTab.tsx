@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileQuestion, Download, Upload, Loader2, Plus, Edit, Trash2, X, Save, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileQuestion, Download, Upload, Loader2, Plus, Edit, Trash2, X, Save, Image as ImageIcon, CheckCircle2, ChevronDown, ChevronUp, Settings, AlertCircle, Type } from 'lucide-react';
 import { api } from '../../services/api';
 import { QuestionRow } from '../../types';
 import * as XLSX from 'xlsx';
@@ -10,18 +10,38 @@ const BankSoalTab = () => {
     const [questions, setQuestions] = useState<QuestionRow[]>([]);
     const [loadingData, setLoadingData] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [configModalOpen, setConfigModalOpen] = useState(false);
     const [currentQ, setCurrentQ] = useState<QuestionRow | null>(null);
     const [importing, setImporting] = useState(false);
     const [expandedQ, setExpandedQ] = useState<string | null>(null);
+    
+    // Subject Config State
+    const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(0);
+    const [savingConfig, setSavingConfig] = useState(false);
 
     useEffect(() => {
         const loadSubjects = async () => {
             const list = await api.getExams();
             let names = list.map(l => l.nama_ujian);
-            const filtered = names.filter(n => !n.startsWith('Survey_'));
             
-            setSubjects(filtered);
-            if (filtered.length > 0) setSelectedSubject(filtered[0]);
+            // SORTING LOGIC: Matematika, IPA, IPS First
+            const priority = ["Matematika", "IPA", "IPS"];
+            names.sort((a, b) => {
+                const idxA = priority.indexOf(a);
+                const idxB = priority.indexOf(b);
+                
+                // If both are in priority list, sort by index
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                // If only A is in priority, A comes first
+                if (idxA !== -1) return -1;
+                // If only B is in priority, B comes first
+                if (idxB !== -1) return 1;
+                // Otherwise sort alphabetically
+                return a.localeCompare(b);
+            });
+
+            setSubjects(names);
+            if (names.length > 0) setSelectedSubject(names[0]);
         };
         loadSubjects();
     }, []);
@@ -33,6 +53,11 @@ const BankSoalTab = () => {
             try {
                 const data = await api.getRawQuestions(selectedSubject);
                 setQuestions(data);
+                
+                // Also get exam config
+                const list = await api.getExams();
+                const currentExam = list.find(e => e.nama_ujian === selectedSubject);
+                if (currentExam) setMaxQuestionsLimit(currentExam.max_questions || 0);
             } catch(e) { console.error(e); }
             finally { setLoadingData(false); }
         };
@@ -50,6 +75,7 @@ const BankSoalTab = () => {
             text_soal: '',
             tipe_soal: 'PG',
             gambar: '',
+            keterangan_gambar: '',
             opsi_a: '',
             opsi_b: '',
             opsi_c: '',
@@ -81,14 +107,28 @@ const BankSoalTab = () => {
         setModalOpen(false);
         setLoadingData(false);
     };
+    
+    const handleSaveConfig = async () => {
+        setSavingConfig(true);
+        try {
+            await api.saveSubjectConfig(selectedSubject, maxQuestionsLimit);
+            alert(`Konfigurasi ${selectedSubject} disimpan. Limit soal diupdate.`);
+            setConfigModalOpen(false);
+        } catch(e) {
+            console.error(e);
+            alert("Gagal menyimpan konfigurasi.");
+        } finally {
+            setSavingConfig(false);
+        }
+    }
 
-    // --- IMPORT / EXPORT LOGIC ---
     const downloadTemplate = () => {
         const row = [{
             "ID Soal": "Q1",
             "Teks Soal": "Berapakah hasil dari 1 + 1?",
             "Tipe Soal (PG/PGK/BS)": "PG",
             "Link Gambar": "",
+            "Keterangan Gambar": "Opsional: Sumber atau deskripsi gambar",
             "Opsi A": "2",
             "Opsi B": "3",
             "Opsi C": "4",
@@ -127,12 +167,13 @@ const BankSoalTab = () => {
                         text_soal: String(row[1] || ""),
                         tipe_soal: (String(row[2] || "PG").toUpperCase() as any),
                         gambar: String(row[3] || ""),
-                        opsi_a: String(row[4] || ""),
-                        opsi_b: String(row[5] || ""),
-                        opsi_c: String(row[6] || ""),
-                        opsi_d: String(row[7] || ""),
-                        kunci_jawaban: String(row[8] || "").toUpperCase(),
-                        bobot: Number(row[9] || 10)
+                        keterangan_gambar: String(row[4] || ""), // New Column
+                        opsi_a: String(row[5] || ""),
+                        opsi_b: String(row[6] || ""),
+                        opsi_c: String(row[7] || ""),
+                        opsi_d: String(row[8] || ""),
+                        kunci_jawaban: String(row[9] || "").toUpperCase(),
+                        bobot: Number(row[10] || 10)
                     });
                 }
 
@@ -158,8 +199,6 @@ const BankSoalTab = () => {
         reader.readAsBinaryString(file);
     };
 
-    // --- GENERIC IMAGE UPLOAD LOGIC ---
-    // Now accepts 'field' to target either the question image ('gambar') or options ('opsi_a', etc.)
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: keyof QuestionRow) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
@@ -171,7 +210,6 @@ const BankSoalTab = () => {
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    // Resize to max 800px to keep base64 string reasonable for Apps Script
                     const maxSize = 800; 
                     let width = img.width;
                     let height = img.height;
@@ -196,7 +234,6 @@ const BankSoalTab = () => {
         }
     };
 
-    // Helper to check if string looks like an image
     const isImage = (val: string) => val && (val.startsWith('data:image') || val.startsWith('http') || val.match(/\.(jpeg|jpg|gif|png)$/) != null);
 
     const renderOptionInput = (label: string, field: 'opsi_a' | 'opsi_b' | 'opsi_c' | 'opsi_d') => {
@@ -245,6 +282,17 @@ const BankSoalTab = () => {
                             >
                                 {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
+                            
+                            {/* Visual Indicator for Config */}
+                            {maxQuestionsLimit > 0 && (
+                                <span className="bg-orange-50 text-orange-600 text-[10px] px-2 py-1 rounded-full font-bold border border-orange-100 flex items-center gap-1" title="Soal dibatasi">
+                                    <AlertCircle size={10}/> Limit: {maxQuestionsLimit}
+                                </span>
+                            )}
+
+                            <button onClick={() => setConfigModalOpen(true)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition border border-transparent hover:border-slate-100" title="Konfigurasi Mapel (Limit Soal)">
+                                <Settings size={16}/>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -254,9 +302,8 @@ const BankSoalTab = () => {
                     </button>
 
                     <label className={`cursor-pointer px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 active:scale-95 ${importing ? 'opacity-50 cursor-wait' : ''}`}>
-                        {importing ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
-                        {importing ? "Mengimpor..." : "Import Excel"}
-                        <input type="file" accept=".xlsx" onChange={handleFileUpload} className="hidden" disabled={importing} />
+                        {importing ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>} {importing ? "Importing..." : "Import Excel"}
+                        <input type="file" accept=".xlsx" className="hidden" onChange={handleFileUpload} disabled={importing} />
                     </label>
 
                     <button onClick={handleAddNew} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95">
@@ -265,128 +312,210 @@ const BankSoalTab = () => {
                 </div>
              </div>
 
-             {/* Question List */}
-             <div className="space-y-4">
-                {loadingData ? (
-                     <div className="flex flex-col items-center justify-center py-24 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
-                        <div className="relative mb-4">
-                            <div className="w-16 h-16 border-4 border-slate-100 rounded-full"></div>
-                            <div className="w-16 h-16 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin absolute inset-0"></div>
-                        </div>
-                        <span className="text-sm font-bold text-slate-400 animate-pulse">Menyiapkan Data Soal...</span>
-                    </div>
-                ) : questions.length === 0 ? (
-                    <div className="p-12 text-center text-slate-400 italic font-medium bg-white rounded-[2rem] border border-slate-100 shadow-sm">
-                        <FileQuestion size={48} className="mx-auto mb-4 opacity-20"/>
-                        Belum ada soal di database mapel ini.
-                    </div>
-                ) : (
-                    questions.map((q, i) => (
-                        <div key={i} className="bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 hover:shadow-md transition-all group overflow-hidden">
-                            <div className="p-5 flex items-start gap-4">
-                                <div className="bg-slate-100 text-slate-500 font-mono font-bold text-xs p-2 rounded-lg min-w-[3rem] text-center border border-slate-200">
-                                    {q.id}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div className="text-slate-800 font-medium text-sm leading-relaxed line-clamp-2 mb-2 pr-4">{q.text_soal}</div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => handleEdit(q)} className="p-2 text-amber-500 bg-amber-50 hover:bg-amber-100 rounded-lg transition"><Edit size={16}/></button>
-                                            <button onClick={() => handleDelete(q.id)} className="p-2 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-lg transition"><Trash2 size={16}/></button>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 mt-1">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${q.tipe_soal === 'PG' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>{q.tipe_soal}</span>
-                                        <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Bobot: {q.bobot}</span>
-                                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Kunci: {q.kunci_jawaban}</span>
-                                        {q.gambar && <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1"><ImageIcon size={10}/> Ada Gambar</span>}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                )}
-             </div>
-             
-             {/* EDIT MODAL */}
-             {modalOpen && currentQ && (
-                 <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-md fade-in">
-                     <div className="bg-white w-full max-w-5xl rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col border border-white/20 transform scale-100 transition-all">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10 rounded-t-[2rem]">
-                            <h3 className="font-black text-xl text-slate-800 flex items-center gap-3"><span className={`p-2 rounded-xl ${currentQ.id ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}><Edit size={20}/></span> {currentQ.id ? 'Edit Soal' : 'Buat Soal Baru'}</h3>
-                            <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition"><X size={24} className="text-slate-400 hover:text-slate-600"/></button>
-                        </div>
-                        <div className="p-8 overflow-y-auto flex-1 custom-scrollbar bg-slate-50/50">
-                            <form id="qForm" onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="group">
-                                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">ID Soal</label>
-                                                <input required type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-mono font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors" value={currentQ.id} onChange={e => setCurrentQ({...currentQ, id: e.target.value})} />
-                                            </div>
-                                            <div className="group">
-                                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Tipe Soal</label>
-                                                <select className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none cursor-pointer" value={currentQ.tipe_soal} onChange={e => setCurrentQ({...currentQ, tipe_soal: e.target.value as any})}>
-                                                    <option value="PG">Pilihan Ganda</option>
-                                                    <option value="PGK">Pilihan Ganda Kompleks</option>
-                                                    <option value="BS">Benar / Salah</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Konten Soal</label>
-                                            <textarea required rows={5} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none resize-none transition-colors leading-relaxed" value={currentQ.text_soal} onChange={e => setCurrentQ({...currentQ, text_soal: e.target.value})} placeholder="Tuliskan pertanyaan disini..."></textarea>
-                                        </div>
-                                        <div className="group">
-                                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Link Gambar / Upload</label>
-                                            <div className="flex gap-2">
-                                                <div className="relative w-12 h-12 bg-slate-50 border-2 border-slate-100 rounded-xl flex items-center justify-center overflow-hidden shrink-0">
-                                                    {isImage(currentQ.gambar) ? (
-                                                        <img src={currentQ.gambar} alt="Preview" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <ImageIcon size={20} className="text-slate-400"/>
+             {/* Questions List */}
+             <div className="bg-white rounded-[1.5rem] shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[11px] tracking-wider">
+                            <tr>
+                                <th className="p-4 w-16 text-center">No</th>
+                                <th className="p-4 w-24">ID</th>
+                                <th className="p-4">Pertanyaan</th>
+                                <th className="p-4 w-32">Tipe</th>
+                                <th className="p-4 w-32 text-center">Kunci</th>
+                                <th className="p-4 w-32 text-center">Bobot</th>
+                                <th className="p-4 w-32 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {loadingData ? (
+                                <tr><td colSpan={7} className="p-12 text-center text-slate-400"><Loader2 className="animate-spin inline mr-2"/> Memuat data soal...</td></tr>
+                            ) : questions.length === 0 ? (
+                                <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">Belum ada soal untuk mata pelajaran ini. Silakan tambah manual atau import Excel.</td></tr>
+                            ) : questions.map((q, idx) => (
+                                <React.Fragment key={q.id}>
+                                    <tr className={`hover:bg-slate-50 transition ${expandedQ === q.id ? 'bg-slate-50' : ''}`}>
+                                        <td className="p-4 text-center text-slate-500 font-bold">{idx + 1}</td>
+                                        <td className="p-4 font-mono text-xs text-slate-400 font-bold">{q.id}</td>
+                                        <td className="p-4">
+                                            <div className="flex items-start gap-3">
+                                                {q.gambar && (
+                                                    <div className="w-16 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
+                                                        <img src={q.gambar} className="w-full h-full object-cover" alt="soal" />
+                                                    </div>
+                                                )}
+                                                <div className="flex-1">
+                                                    <div className="line-clamp-2 font-medium text-slate-700">{q.text_soal || <span className="italic text-slate-300">Tanpa Teks</span>}</div>
+                                                    {q.keterangan_gambar && (
+                                                        <div className="text-[10px] text-blue-500 font-medium mt-1 flex items-center gap-1"><ImageIcon size={10}/> {q.keterangan_gambar}</div>
                                                     )}
                                                 </div>
-                                                <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-xs" value={currentQ.gambar} onChange={e => setCurrentQ({...currentQ, gambar: e.target.value})} placeholder="Paste URL atau Upload..." />
-                                                <label className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl cursor-pointer transition shadow-lg shadow-indigo-200 flex items-center justify-center">
-                                                    <Upload size={20}/>
-                                                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, 'gambar')} />
-                                                </label>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 group focus-within:ring-2 focus-within:ring-emerald-200 transition-all">
-                                            <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1 ml-1">Kunci Jawaban</label>
-                                            <input required type="text" className="w-full p-3 bg-white border-2 border-emerald-200 rounded-xl font-mono font-black text-emerald-700 focus:outline-none text-center text-lg" value={currentQ.kunci_jawaban} onChange={e => setCurrentQ({...currentQ, kunci_jawaban: e.target.value})} placeholder={currentQ.tipe_soal === 'PG' ? 'A' : 'A, C'} />
-                                        </div>
-                                        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 group focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
-                                            <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1 ml-1">Bobot Nilai</label>
-                                            <input type="number" className="w-full p-3 bg-white border-2 border-indigo-200 rounded-xl font-bold text-indigo-700 focus:outline-none text-center text-lg" value={currentQ.bobot} onChange={e => setCurrentQ({...currentQ, bobot: Number(e.target.value)})} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="space-y-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
-                                    <h4 className="font-bold text-slate-700 border-b-2 border-slate-100 pb-3 mb-4 flex items-center gap-2"><CheckCircle2 size={18} className="text-slate-400"/> Pilihan Jawaban</h4>
-                                    <div className="space-y-4">
-                                        {renderOptionInput("Opsi A / Pernyataan 1", 'opsi_a')}
-                                        {renderOptionInput("Opsi B / Pernyataan 2", 'opsi_b')}
-                                        {renderOptionInput("Opsi C / Pernyataan 3", 'opsi_c')}
-                                        
-                                        {currentQ.tipe_soal !== 'PGK' && (
-                                           renderOptionInput("Opsi D / Pernyataan 4", 'opsi_d')
-                                        )}
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                        <div className="p-6 border-t border-slate-100 bg-white rounded-b-[2rem] flex justify-end gap-4">
-                            <button onClick={() => setModalOpen(false)} className="px-6 py-3.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition">Batalkan</button>
-                            <button type="submit" form="qForm" disabled={loadingData} className="px-8 py-3.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all transform active:scale-95 flex items-center gap-2">
-                                {loadingData ? <><Loader2 size={20} className="animate-spin"/> Menyimpan...</> : <><Save size={20}/> Simpan Soal</>}
-                            </button>
-                        </div>
+                                            <button onClick={() => setExpandedQ(expandedQ === q.id ? null : q.id)} className="text-[10px] text-indigo-500 font-bold mt-1 flex items-center gap-1 hover:underline">
+                                                {expandedQ === q.id ? <>Sembunyikan Detail <ChevronUp size={12}/></> : <>Lihat Detail <ChevronDown size={12}/></>}
+                                            </button>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${q.tipe_soal === 'PG' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-purple-50 text-purple-600 border border-purple-100'}`}>
+                                                {q.tipe_soal}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-center font-bold font-mono text-emerald-600 bg-emerald-50/30">{q.kunci_jawaban}</td>
+                                        <td className="p-4 text-center font-bold text-slate-600">{q.bobot}</td>
+                                        <td className="p-4">
+                                            <div className="flex justify-center gap-2">
+                                                <button onClick={() => handleEdit(q)} className="p-2 bg-amber-50 text-amber-600 rounded-lg border border-amber-100 hover:bg-amber-100 transition"><Edit size={14}/></button>
+                                                <button onClick={() => handleDelete(q.id)} className="p-2 bg-rose-50 text-rose-600 rounded-lg border border-rose-100 hover:bg-rose-100 transition"><Trash2 size={14}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedQ === q.id && (
+                                        <tr className="bg-slate-50/50">
+                                            <td colSpan={7} className="p-4 pl-16">
+                                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                                    <div className={`p-2 rounded border ${q.kunci_jawaban === 'A' ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                                                        <span className="font-bold mr-2">A.</span> {q.opsi_a}
+                                                    </div>
+                                                    <div className={`p-2 rounded border ${q.kunci_jawaban === 'B' ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                                                        <span className="font-bold mr-2">B.</span> {q.opsi_b}
+                                                    </div>
+                                                    <div className={`p-2 rounded border ${q.kunci_jawaban === 'C' ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                                                        <span className="font-bold mr-2">C.</span> {q.opsi_c}
+                                                    </div>
+                                                    <div className={`p-2 rounded border ${q.kunci_jawaban === 'D' ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                                                        <span className="font-bold mr-2">D.</span> {q.opsi_d}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+
+             {/* Config Modal */}
+             {configModalOpen && (
+                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-in">
+                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 border border-white/20">
+                         <div className="flex justify-between items-center mb-6">
+                             <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Settings size={20} className="text-slate-600"/> Konfigurasi Mapel</h3>
+                             <button onClick={() => setConfigModalOpen(false)}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                         </div>
+                         <div className="space-y-4">
+                             <div>
+                                 <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Mata Pelajaran</label>
+                                 <div className="font-bold text-slate-800 text-lg">{selectedSubject}</div>
+                             </div>
+                             <div>
+                                 <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Limit Jumlah Soal Tampil</label>
+                                 <input 
+                                    type="number" 
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 text-center text-xl" 
+                                    value={maxQuestionsLimit}
+                                    onChange={(e) => setMaxQuestionsLimit(Number(e.target.value))}
+                                 />
+                                 <p className="text-[10px] text-slate-400 mt-1">Isi 0 untuk menampilkan semua soal.</p>
+                             </div>
+                             <div className="pt-2">
+                                 <button onClick={handleSaveConfig} disabled={savingConfig} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition flex justify-center items-center gap-2">
+                                     {savingConfig ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Simpan Konfigurasi
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             )}
+
+             {/* Edit/Add Modal */}
+             {modalOpen && currentQ && (
+                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-in">
+                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-white/20">
+                         <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-[2rem]">
+                             <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">
+                                 {currentQ.id.startsWith('Q') && !questions.find(q => q.id === currentQ.id) ? <Plus size={24} className="text-indigo-600"/> : <Edit size={24} className="text-amber-500"/>}
+                                 {currentQ.id.startsWith('Q') && !questions.find(q => q.id === currentQ.id) ? 'Tambah Soal Baru' : 'Edit Soal'}
+                             </h3>
+                             <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition"><X size={24} className="text-slate-400"/></button>
+                         </div>
+                         <div className="p-8 overflow-y-auto custom-scrollbar">
+                             <form onSubmit={handleSave} className="space-y-6">
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                     <div className="md:col-span-2 space-y-4">
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Teks Soal</label>
+                                             <textarea required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors min-h-[120px] text-sm" value={currentQ.text_soal} onChange={e => setCurrentQ({...currentQ, text_soal: e.target.value})} placeholder="Tulis pertanyaan disini..."></textarea>
+                                         </div>
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Gambar Soal (Link / Upload)</label>
+                                             <div className="flex gap-2">
+                                                 <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-sm" value={currentQ.gambar} onChange={e => setCurrentQ({...currentQ, gambar: e.target.value})} placeholder="https://... atau Upload" />
+                                                 <label className="bg-indigo-50 text-indigo-600 border-2 border-indigo-100 p-3 rounded-xl cursor-pointer hover:bg-indigo-100 transition flex items-center justify-center active:scale-95">
+                                                     <ImageIcon size={20}/>
+                                                     <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => handleImageUpload(e, 'gambar')} />
+                                                 </label>
+                                             </div>
+                                             {currentQ.gambar && (
+                                                 <div className="mt-2 h-32 w-full bg-slate-100 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center">
+                                                     <img src={currentQ.gambar} alt="Preview" className="h-full object-contain" />
+                                                 </div>
+                                             )}
+                                         </div>
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Keterangan Gambar (Caption)</label>
+                                             <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-medium text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-sm" value={currentQ.keterangan_gambar || ''} onChange={e => setCurrentQ({...currentQ, keterangan_gambar: e.target.value})} placeholder="Sumber gambar atau deskripsi tambahan..." />
+                                         </div>
+                                     </div>
+                                     <div className="space-y-4">
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">ID Soal</label>
+                                             <input type="text" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-sm" value={currentQ.id} onChange={e => setCurrentQ({...currentQ, id: e.target.value})} disabled={questions.some(q => q.id === currentQ.id && q !== currentQ)} />
+                                         </div>
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Tipe Soal</label>
+                                             <select className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-sm appearance-none" value={currentQ.tipe_soal} onChange={e => setCurrentQ({...currentQ, tipe_soal: e.target.value as any})}><option value="PG">Pilihan Ganda</option><option value="PGK">Pilihan Ganda Kompleks</option><option value="BS">Benar / Salah</option></select>
+                                         </div>
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Kunci Jawaban</label>
+                                             <input type="text" className="w-full p-3 bg-emerald-50 border-2 border-emerald-100 rounded-xl font-bold text-emerald-700 focus:bg-white focus:border-emerald-500 outline-none transition-colors text-sm" value={currentQ.kunci_jawaban} onChange={e => setCurrentQ({...currentQ, kunci_jawaban: e.target.value.toUpperCase()})} placeholder="Contoh: A (PG) atau A,C (PGK)" />
+                                         </div>
+                                         <div className="group">
+                                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Bobot Nilai</label>
+                                             <input type="number" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 focus:bg-white focus:border-indigo-500 outline-none transition-colors text-sm" value={currentQ.bobot} onChange={e => setCurrentQ({...currentQ, bobot: Number(e.target.value)})} />
+                                         </div>
+                                     </div>
+                                 </div>
+                                 
+                                 {/* Options Section */}
+                                 {currentQ.tipe_soal !== 'BS' && (
+                                     <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Pilihan Jawaban</h4>
+                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {renderOptionInput('Opsi A', 'opsi_a')}
+                                            {renderOptionInput('Opsi B', 'opsi_b')}
+                                            {renderOptionInput('Opsi C', 'opsi_c')}
+                                            {renderOptionInput('Opsi D', 'opsi_d')}
+                                         </div>
+                                     </div>
+                                 )}
+                                 
+                                 {currentQ.tipe_soal === 'BS' && (
+                                     <div className="bg-orange-50 p-4 rounded-xl text-orange-800 text-sm font-medium border border-orange-100 flex items-center gap-2">
+                                         <span className="font-bold bg-orange-200 px-2 py-0.5 rounded text-xs">INFO</span>
+                                         Untuk soal Benar/Salah, Opsi A dianggap "Benar", Opsi B dianggap "Salah". Tulis pernyataan di Opsi A/B/C/D jika Multi-BS.
+                                     </div>
+                                 )}
+
+                                 <div className="pt-4 flex gap-3 sticky bottom-0 bg-white border-t border-slate-100 mt-4 py-4">
+                                     <button type="button" onClick={() => setModalOpen(false)} className="flex-1 py-3.5 border-2 border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-100 hover:text-slate-700 transition">Batal</button>
+                                     <button type="submit" disabled={loadingData} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex justify-center items-center gap-2 transform active:scale-95 transition-all">
+                                         {loadingData ? <Loader2 size={20} className="animate-spin"/> : <Save size={20}/>} Simpan Soal
+                                     </button>
+                                 </div>
+                             </form>
+                         </div>
                      </div>
                  </div>
              )}

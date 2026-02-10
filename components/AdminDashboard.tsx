@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Home, LogOut, Menu, Monitor, Group, Clock, Printer, List, Calendar, Key, FileQuestion, LayoutDashboard, BarChart3, Award, RefreshCw, X, CreditCard, Bell, CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
+import { Home, LogOut, Menu, Monitor, Group, Clock, Printer, List, Calendar, Key, FileQuestion, LayoutDashboard, BarChart3, Award, RefreshCw, X, CreditCard, Bell, CheckCircle2, ChevronDown, User as UserIcon, Settings, Camera, Upload, Save, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 import { User } from '../types';
 import { DashboardSkeleton } from '../utils/adminHelpers';
@@ -64,8 +64,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false); // New State for Desktop Collapse
+  const [isCollapsed, setIsCollapsed] = useState(false); 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  
+  // Profile & Menu State
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState<User>(user);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   // Real-time Notification State
   const [finishAlert, setFinishAlert] = useState<{name: string, school: string} | null>(null);
@@ -78,12 +84,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     setCurrentUserState(user);
+    setProfileForm(user);
   }, [user]);
 
   const handleTabChange = (tab: TabType) => {
       setActiveTab(tab);
       localStorage.setItem('cbt_admin_tab', tab);
-      setIsSidebarOpen(false); // Close mobile sidebar on selection
+      setIsSidebarOpen(false); 
   };
 
   const fetchData = async () => {
@@ -97,6 +104,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
             if (freshUser) {
                 const updatedUser = { ...user, ...freshUser };
                 setCurrentUserState(updatedUser);
+                setProfileForm(updatedUser);
                 localStorage.setItem('cbt_user', JSON.stringify(updatedUser));
             }
         }
@@ -110,7 +118,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh notifications every 30 seconds
     const interval = setInterval(() => {
         fetchData();
     }, 30000);
@@ -127,44 +134,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       );
 
       if (newFinishes.length > 0) {
-          // Update timestamp cursor to the latest event found
           const maxTime = Math.max(...newFinishes.map((l:any) => new Date(l.timestamp).getTime()));
           lastFinishTimeRef.current = maxTime;
 
-          // Get the most relevant log
           let targetLog = newFinishes[0]; 
           
-          // If Admin Sekolah, verify the log belongs to their school
           if (currentUserState.role === 'admin_sekolah') {
               const mySchool = (currentUserState.kelas_id || '').toLowerCase();
               const schoolLog = newFinishes.find((l:any) => (l.school || '').toLowerCase() === mySchool);
-              if (!schoolLog) return; // No relevant student finished
+              if (!schoolLog) return; 
               targetLog = schoolLog;
           }
 
-          // Trigger Alert
           setFinishAlert({ name: targetLog.fullname, school: targetLog.school });
-          
-          // Auto dismiss after 6 seconds
           const timer = setTimeout(() => setFinishAlert(null), 6000);
           return () => clearTimeout(timer);
       }
   }, [dashboardData.activityFeed, currentUserState]);
 
-  // Filter finished students for notification from Activity Feed (Dropdown)
   const finishedStudents = useMemo(() => {
       if (!dashboardData.activityFeed) return [];
-      
-      // Filter activity feed for FINISH actions
       let finished = dashboardData.activityFeed.filter((log: any) => log.action === 'FINISH');
-      
-      // If School Admin, filter by school
       if (currentUserState.role === 'admin_sekolah') {
           const mySchool = (currentUserState.kelas_id || '').toLowerCase();
           finished = finished.filter((log: any) => (log.school || '').toLowerCase() === mySchool);
       }
-      
-      // Take top 5 most recent
       return finished.slice(0, 5);
   }, [dashboardData, currentUserState]);
 
@@ -187,7 +181,67 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     }
   };
 
-  // Modern Navigation Button with "Red List" on Active State
+  const formatRole = (role: string) => {
+      if (role === 'admin_pusat') return 'Administrator';
+      if (role === 'admin_sekolah') return 'Proktor Sekolah';
+      return 'Peserta';
+  };
+
+  // Image Helper for Profile
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 2 * 1024 * 1024) { alert("Ukuran file terlalu besar. Maks 2MB"); return; }
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const maxSize = 500;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > height) { if (width > maxSize) { height *= maxSize / width; width = maxSize; } } else { if (height > maxSize) { width *= maxSize / height; height = maxSize; } }
+                    canvas.width = Math.floor(width); canvas.height = Math.floor(height);
+                    if (ctx) { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); const dataUrl = canvas.toDataURL('image/jpeg', 0.9); setProfileForm(prev => ({ ...prev, photo_url: dataUrl })); }
+                };
+                img.src = event.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+        }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsSavingProfile(true);
+      try {
+          // Prepare payload matching backend expected structure
+          const payload = {
+              id: profileForm.id,
+              username: profileForm.username,
+              password: profileForm.password,
+              role: profileForm.role,
+              fullname: profileForm.nama_lengkap, // Backend uses 'fullname'
+              school: profileForm.kelas_id,
+              kecamatan: profileForm.kecamatan,
+              gender: profileForm.jenis_kelamin,
+              photo_url: profileForm.photo_url
+          };
+          
+          await api.saveUser(payload);
+          await fetchData();
+          alert("Profil berhasil diperbarui!");
+          setIsProfileModalOpen(false);
+      } catch (err) {
+          console.error(err);
+          alert("Gagal memperbarui profil.");
+      } finally {
+          setIsSavingProfile(false);
+      }
+  };
+
   const navButtonClass = (tab: TabType) => `
     flex items-center ${isCollapsed ? 'justify-center px-2' : 'gap-3 px-5'} w-full py-3.5 my-1 rounded-r-full text-sm font-bold transition-all duration-300 relative group
     ${activeTab === tab 
@@ -221,27 +275,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         ${isSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full'} 
         md:translate-x-0 md:static ${isCollapsed ? 'md:w-20' : 'md:w-72'}`}
       >
-        <div className={`p-4 ${isCollapsed ? 'py-6 flex justify-center' : 'p-8 pb-6'}`}>
+        <div className={`p-4 ${isCollapsed ? 'py-6 flex justify-center' : 'p-6 pb-2'}`}>
           <div className={`flex ${isCollapsed ? 'flex-col gap-4 items-center' : 'justify-between items-start'}`}>
             <div className={`${isCollapsed ? 'text-center' : ''}`}>
-                <div className={`flex items-center ${isCollapsed ? 'justify-center mb-0' : 'gap-2 mb-2'}`}>
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100 p-1 shrink-0 overflow-hidden">
+                <div className={`flex items-center ${isCollapsed ? 'justify-center mb-0' : 'gap-3 mb-2'}`}>
+                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100 p-1 shrink-0 overflow-hidden">
                          <img src={logoUrl} className="w-full h-full object-contain" alt="Logo" />
                     </div>
                     {/* Collapsible Text */}
-                    <span className={`font-black text-sm md:text-lg text-slate-800 tracking-tight transition-opacity duration-200 ${isCollapsed ? 'hidden' : 'opacity-100'}`}>
-                        COMPUTER <span className="text-red-600">ASSESMENT</span> <span className="text-blue-600">TEST</span>
-                    </span>
+                    <div className={`flex flex-col justify-center transition-opacity duration-200 ${isCollapsed ? 'hidden' : 'opacity-100'}`}>
+                        <span className="font-extrabold text-sm text-slate-800 leading-none tracking-tight">OLIMPIADE</span>
+                        <span className="font-extrabold text-sm text-slate-800 leading-none tracking-tight"><span className="text-red-600">SAINS</span> <span className="text-blue-600">NASIONAL</span></span>
+                    </div>
                 </div>
-                {!isCollapsed && (
-                    <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest pl-1 whitespace-nowrap">{currentUserState.role === 'admin_pusat' ? 'Administrator' : 'Proktor Panel'}</p>
-                )}
             </div>
             
             {/* Toggle Button Desktop */}
             <button 
                 onClick={() => setIsCollapsed(!isCollapsed)} 
-                className="hidden md:flex p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors"
+                className="hidden md:flex p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors"
                 title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             >
                 <Menu size={20} />
@@ -325,8 +377,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
           )}
         </nav>
 
-        <div className={`p-6 border-t border-slate-50 bg-white ${isCollapsed ? 'flex justify-center' : ''}`}>
-            <div className={`bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4 flex items-center gap-3 ${isCollapsed ? 'justify-center p-2' : ''}`}>
+        <div className={`p-4 border-t border-slate-50 bg-white ${isCollapsed ? 'flex justify-center' : ''}`}>
+            <div className={`bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-center gap-3 ${isCollapsed ? 'justify-center p-2' : ''}`}>
                 {currentUserState.photo_url ? (
                     <img src={currentUserState.photo_url} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm shrink-0" alt="Profile" />
                 ) : (
@@ -334,15 +386,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                 )}
                 {!isCollapsed && (
                     <div className="overflow-hidden">
-                        <p className="text-xs font-bold text-slate-800 truncate">{currentUserState.nama_lengkap || currentUserState.username}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{currentUserState.role === 'admin_pusat' ? 'Administrator' : 'Proktor'}</p>
+                        <p className="text-xs font-bold text-slate-800 truncate leading-tight">{currentUserState.nama_lengkap || currentUserState.username}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide mt-0.5">{formatRole(currentUserState.role)}</p>
                     </div>
                 )}
             </div>
-            <button onClick={onLogout} className={`flex items-center justify-center gap-2 w-full px-4 py-3.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg shadow-red-200 transform active:scale-95 ${isCollapsed ? 'px-0' : ''}`} title="Logout">
-                <LogOut size={16} /> 
-                {!isCollapsed && <span>Logout</span>}
-            </button>
         </div>
       </aside>
 
@@ -358,6 +406,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     <p className="text-sm text-slate-400 font-medium hidden md:block">Selamat Datang, <span className="font-bold text-indigo-600">{currentUserState.nama_lengkap || currentUserState.username}</span></p>
                 </div>
             </div>
+            
             <div className="flex items-center gap-4 self-end md:self-auto w-full md:w-auto justify-end">
                 {/* Notification Alerts */}
                 <div className="relative group" onMouseLeave={() => setIsNotifOpen(false)}>
@@ -416,8 +465,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
                 <button onClick={fetchData} disabled={isRefreshing || loading} title="Refresh Data" className="flex items-center gap-2 px-4 py-2.5 bg-white text-indigo-600 rounded-full hover:bg-indigo-50 transition border border-indigo-100 shadow-sm active:scale-95 disabled:opacity-50 font-bold text-xs">
                     <RefreshCw size={16} className={isRefreshing || loading ? "animate-spin" : ""} />
-                    <span>Sinkronisasi</span>
+                    <span className="hidden sm:inline">Sinkronisasi</span>
                 </button>
+
+                {/* USER PROFILE DROPDOWN */}
+                <div className="relative" onMouseLeave={() => setIsUserMenuOpen(false)}>
+                    <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center gap-2 pl-2 pr-4 py-2 bg-white rounded-full border border-slate-200 hover:border-slate-300 transition shadow-sm active:scale-95 group">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200">
+                            {currentUserState.photo_url ? (
+                                <img src={currentUserState.photo_url} className="w-full h-full object-cover" alt="Profile" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold">{currentUserState.username.charAt(0).toUpperCase()}</div>
+                            )}
+                        </div>
+                        <div className="text-left hidden sm:block">
+                            <p className="text-xs font-bold text-slate-700 leading-none">{currentUserState.username}</p>
+                        </div>
+                        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isUserMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                            <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                                <p className="text-xs font-bold text-slate-800 truncate">{currentUserState.nama_lengkap}</p>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold mt-0.5">{formatRole(currentUserState.role)}</p>
+                            </div>
+                            <button onClick={() => { setIsUserMenuOpen(false); setIsProfileModalOpen(true); }} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition flex items-center gap-2">
+                                <UserIcon size={14} /> Profil Saya
+                            </button>
+                            <button onClick={onLogout} className="w-full text-left px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 transition flex items-center gap-2 border-t border-slate-50">
+                                <LogOut size={14} /> Keluar Aplikasi
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
           </div>
 
@@ -446,7 +527,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                     {activeTab === 'cetak_kartu' && <CetakKartuTab currentUser={currentUserState} students={dashboardData.allUsers || []} schedules={dashboardData.schedules || []} />}
                     {activeTab === 'data_user' && (currentUserState.role === 'admin_pusat' || currentUserState.role === 'admin_sekolah') && <DaftarPesertaTab currentUser={currentUserState} onDataChange={fetchData} />}
                     {activeTab === 'atur_gelombang' && currentUserState.role === 'admin_pusat' && <AturGelombangTab students={dashboardData.allUsers || []} />}
-                    {activeTab === 'rilis_token' && <RilisTokenTab currentUser={currentUserState} token={dashboardData.token} duration={dashboardData.duration} maxQuestions={dashboardData.maxQuestions} surveyDuration={0} refreshData={fetchData} isRefreshing={isRefreshing} />}
+                    {activeTab === 'rilis_token' && <RilisTokenTab currentUser={currentUserState} token={dashboardData.token} duration={dashboardData.duration} maxQuestions={dashboardData.maxQuestions} refreshData={fetchData} isRefreshing={isRefreshing} />}
                     {activeTab === 'bank_soal' && currentUserState.role === 'admin_pusat' && <BankSoalTab />}
                     {activeTab === 'rekap' && currentUserState.role === 'admin_pusat' && <RekapTab students={dashboardData.allUsers} />}
                     {activeTab === 'ranking' && currentUserState.role === 'admin_pusat' && <RankingTab students={dashboardData.allUsers} />}
@@ -456,6 +537,65 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
           </div>
         </div>
       </main>
+
+      {/* PROFILE EDIT MODAL */}
+      {isProfileModalOpen && (
+         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-in">
+             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-white/20 transform scale-100 transition-all">
+                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
+                     <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><Settings size={24} className="text-slate-600"/> Edit Profil Saya</h3>
+                     <button onClick={() => setIsProfileModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition"><X size={24} className="text-slate-400 hover:text-slate-600"/></button>
+                 </div>
+                 <div className="p-8 overflow-y-auto custom-scrollbar bg-slate-50/50">
+                    <form onSubmit={handleSaveProfile} className="space-y-6">
+                        <div className="flex justify-center mb-6">
+                            <div className="relative group">
+                                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-200 flex items-center justify-center">
+                                    {profileForm.photo_url ? <img src={profileForm.photo_url} className="w-full h-full object-cover" /> : <Camera size={32} className="text-slate-400"/>}
+                                </div>
+                                <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-2 rounded-full cursor-pointer hover:bg-indigo-700 shadow-md border-2 border-white transition-transform hover:scale-110">
+                                    <Upload size={14}/>
+                                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleProfileImageChange} />
+                                </label>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="group">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Username</label>
+                                    <input type="text" className="w-full p-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-500 outline-none cursor-not-allowed" value={profileForm.username} disabled />
+                                </div>
+                                <div className="group">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Password</label>
+                                    <input type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={profileForm.password || ''} onChange={e => setProfileForm({...profileForm, password: e.target.value})} placeholder="Ubah Password" />
+                                </div>
+                            </div>
+                            <div className="group">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">Nama Lengkap</label>
+                                <input required type="text" className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" value={profileForm.nama_lengkap} onChange={e => setProfileForm({...profileForm, nama_lengkap: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="group">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Role</label>
+                                    <input type="text" className="w-full p-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-500 outline-none cursor-not-allowed" value={formatRole(profileForm.role)} disabled />
+                                </div>
+                                <div className="group">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1 group-focus-within:text-indigo-500 transition-colors">L/P</label>
+                                    <select className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all appearance-none" value={profileForm.jenis_kelamin || 'L'} onChange={e => setProfileForm({...profileForm, jenis_kelamin: e.target.value})}><option value="L">Laki-laki</option><option value="P">Perempuan</option></select>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="pt-4 flex gap-3">
+                            <button type="button" onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-3.5 border-2 border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-100 hover:text-slate-700 transition">Batal</button>
+                            <button type="submit" disabled={isSavingProfile} className="flex-1 py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex justify-center items-center gap-2 transform active:scale-95 transition-all">
+                                {isSavingProfile ? <RefreshCw size={20} className="animate-spin"/> : <Save size={20}/>} Simpan Profil
+                            </button>
+                        </div>
+                    </form>
+                 </div>
+             </div>
+         </div>
+      )}
     </div>
   );
 };

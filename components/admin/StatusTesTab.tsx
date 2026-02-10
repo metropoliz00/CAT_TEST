@@ -33,12 +33,17 @@ const StatusTesTab = ({ currentUser, students, refreshData }: { currentUser: Use
     }, [students, searchTerm, currentUser, filterSchool, filterKecamatan]);
 
     const handleReset = async (username: string) => { 
-        if(!confirm(`Reset login untuk ${username}? Siswa akan logout otomatis and status menjadi OFFLINE.`)) return; 
+        if(!confirm(`Reset login untuk ${username}? Siswa akan logout otomatis dan status menjadi OFFLINE.`)) return; 
         setResetting(username); 
         try { 
             await api.resetLogin(username); 
+            // Optimistically update status locally
+            const student = students.find(s => s.username === username);
+            if (student) {
+                student.status = 'OFFLINE';
+            }
             refreshData(); 
-            // Optional: Add toast here if library available
+            alert(`Berhasil reset login untuk ${username}.`);
         } catch(e) { 
             console.error(e); 
             alert("Gagal reset login."); 
@@ -46,6 +51,17 @@ const StatusTesTab = ({ currentUser, students, refreshData }: { currentUser: Use
             setResetting(null); 
         } 
     }
+
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const school = e.target.value;
+        setFilterSchool(school);
+        if (school !== 'all') {
+            const sample = students.find(s => s.school === school);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
 
     const renderStatusBadge = (status: string) => { 
         switch (status) { 
@@ -75,7 +91,7 @@ const StatusTesTab = ({ currentUser, students, refreshData }: { currentUser: Use
                         </div>
                         <div className="relative group">
                             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16}/>
-                            <select className="pl-10 pr-4 py-3 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 outline-none focus:border-indigo-500 focus:bg-white bg-slate-50 transition-all cursor-pointer w-full md:w-48 appearance-none" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}><option value="all">Semua Sekolah</option>{uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                            <select className="pl-10 pr-4 py-3 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-600 outline-none focus:border-indigo-500 focus:bg-white bg-slate-50 transition-all cursor-pointer w-full md:w-48 appearance-none" value={filterSchool} onChange={handleSchoolChange}><option value="all">Semua Sekolah</option>{uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}</select>
                         </div>
                         </>
                     )}
@@ -93,7 +109,7 @@ const StatusTesTab = ({ currentUser, students, refreshData }: { currentUser: Use
                          <thead className="bg-slate-50/80 text-slate-500 font-extrabold uppercase text-[10px] md:text-[11px] tracking-wider backdrop-blur-sm sticky top-0 z-10">
                              <tr>
                                  <th className="p-3 md:p-5 border-b border-slate-200">Peserta</th>
-                                 <th className="p-3 md:p-5 border-b border-slate-200">Sekolah & Wilayah</th>
+                                 <th className="p-3 md:p-5 border-b border-slate-200">Sekolah & Kecamatan</th>
                                  <th className="p-3 md:p-5 border-b border-slate-200">Status</th>
                                  <th className="p-3 md:p-5 border-b border-slate-200">Ujian Aktif</th>
                                  <th className="p-3 md:p-5 border-b border-slate-200 text-center">Kontrol</th>

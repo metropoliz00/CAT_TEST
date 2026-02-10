@@ -67,6 +67,17 @@ const RankingTab = ({ students }: { students: any[] }) => {
             return scoreB - scoreA; // Highest to Lowest
         });
     }, [data, filterKecamatan, filterSchool, filterSubject, userMap]);
+
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setFilterSchool(val);
+        if (val !== 'all') {
+            const sample = students.find(s => s.school === val);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
     
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
@@ -91,7 +102,7 @@ const RankingTab = ({ students }: { students: any[] }) => {
                     </div>
 
                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterKecamatan} onChange={e => setFilterKecamatan(e.target.value)}><option value="all">Semua Kecamatan</option>{uniqueKecamatans.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
-                    <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}><option value="all">Semua Sekolah</option>{uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
+                    <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}><option value="all">Semua Sekolah</option>{uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
                     
                     <button onClick={() => exportToExcel(filteredData, `Ranking_${filterSubject || 'All'}`)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition shadow-lg shadow-emerald-200"><FileText size={16}/> Export</button>
                 </div>

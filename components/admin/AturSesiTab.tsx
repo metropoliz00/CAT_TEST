@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Clock, Search, Save, Loader2 } from 'lucide-react';
+import { Clock, Search, Save, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import { User } from '../../types';
 
@@ -40,6 +40,13 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
     const handleSave = async () => {
         if (!sessionInput) return alert("Pilih sesi");
         if (selectedUsers.size === 0) return alert("Pilih siswa");
+        
+        // Validate active exam again
+        const invalidUsers = filteredStudents.filter(s => selectedUsers.has(s.username) && (!s.active_exam || s.active_exam === '-'));
+        if (invalidUsers.length > 0) {
+            return alert("Beberapa siswa terpilih belum memiliki Kelompok Tes (Ujian Aktif). Silakan atur Kelompok Tes terlebih dahulu.");
+        }
+
         const updates = Array.from(selectedUsers).map(u => ({ username: String(u), session: sessionInput }));
         await api.updateUserSessions(updates);
         alert("Sesi berhasil diupdate");
@@ -51,6 +58,24 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
         if (checked) setSelectedUsers(new Set(filteredStudents.map(s => s.username)));
         else setSelectedUsers(new Set());
     };
+
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const school = e.target.value;
+        setFilterSchool(school);
+        if (school !== 'all') {
+            const sample = students.find(s => s.school === school);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
+
+    // Check if ANY selected user is missing an active exam
+    const hasMissingExamForSelection = useMemo(() => {
+        if (selectedUsers.size === 0) return false; 
+        const users = filteredStudents.filter(s => selectedUsers.has(s.username));
+        return users.some(u => !u.active_exam || u.active_exam === '-');
+    }, [selectedUsers, filteredStudents]);
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 fade-in p-6">
@@ -85,7 +110,7 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
                             <select 
                                 className="p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100"
                                 value={filterSchool}
-                                onChange={e => setFilterSchool(e.target.value)}
+                                onChange={handleSchoolChange}
                             >
                                 <option value="all">Semua Sekolah</option>
                                 {uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}
@@ -102,9 +127,16 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
                     </div>
                 </div>
                 <div className="flex items-end gap-2">
-                    <button onClick={handleSave} disabled={isLoading} className="h-[38px] px-6 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2 whitespace-nowrap">
-                        {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Atur Sesi
-                    </button>
+                    {/* Hide button if selected users don't have active exam */}
+                    {!hasMissingExamForSelection ? (
+                        <button onClick={handleSave} disabled={isLoading || selectedUsers.size === 0} className="h-[38px] px-6 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                            {isLoading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Atur Sesi
+                        </button>
+                    ) : (
+                        <div className="h-[38px] px-4 bg-orange-50 border border-orange-200 text-orange-600 rounded-lg flex items-center gap-2 text-xs font-bold whitespace-nowrap animate-pulse" title="Siswa belum memiliki Ujian Aktif">
+                            <AlertCircle size={16} /> Kelompok Tes Belum Diset
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -115,12 +147,13 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
                             <th className="p-4">Nama Peserta</th>
                             <th className="p-4">Sekolah</th>
                             <th className="p-4">Kecamatan</th>
+                            <th className="p-4">Ujian Aktif</th>
                             <th className="p-4">Sesi Saat Ini</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {filteredStudents.length === 0 ? (
-                            <tr><td colSpan={5} className="p-8 text-center text-slate-400 italic">Tidak ada peserta yang cocok dengan filter.</td></tr>
+                            <tr><td colSpan={6} className="p-8 text-center text-slate-400 italic">Tidak ada peserta yang cocok dengan filter.</td></tr>
                         ) : filteredStudents.map(s => (
                             <tr key={s.username} className="hover:bg-slate-50 transition">
                                 <td className="p-4">
@@ -134,6 +167,13 @@ const AturSesiTab = ({ currentUser, students, refreshData, isLoading }: { curren
                                 <td className="p-4 font-bold text-slate-700">{s.fullname}</td>
                                 <td className="p-4 text-slate-600">{s.school}</td>
                                 <td className="p-4 text-slate-600">{s.kecamatan || '-'}</td>
+                                <td className="p-4">
+                                    {s.active_exam && s.active_exam !== '-' ? (
+                                        <span className="text-emerald-600 font-bold text-xs bg-emerald-50 px-2 py-1 rounded border border-emerald-100">{s.active_exam}</span>
+                                    ) : (
+                                        <span className="text-rose-500 font-bold text-xs bg-rose-50 px-2 py-1 rounded border border-rose-100">Belum Ada</span>
+                                    )}
+                                </td>
                                 <td className="p-4">
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${s.session ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                         {s.session || 'Belum Diatur'}

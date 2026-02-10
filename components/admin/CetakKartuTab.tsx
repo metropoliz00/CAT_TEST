@@ -52,10 +52,16 @@ const CetakKartuTab = ({ currentUser, students, schedules }: { currentUser: User
             return true;
         });
     }, [localStudents, currentUser, filterSchool, filterKecamatan, filterSession]);
-
-    const getGelombang = (schoolName: string) => {
-        const sched = schedules.find((s: any) => s.school === schoolName);
-        return sched ? sched.gelombang : '-';
+    
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setFilterSchool(val);
+        if (val !== 'all') {
+            const sample = localStudents.find(s => s.school === val);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
     };
     
     // UPDATED LOGOS
@@ -86,7 +92,7 @@ const CetakKartuTab = ({ currentUser, students, schedules }: { currentUser: User
                         <table class="info-table">
                             <tr><td width="65">Nama</td><td>: <b>${s.fullname}</b></td></tr>
                             <tr><td>Sekolah</td><td>: ${s.school}</td></tr>
-                            <tr><td>Gelombang</td><td>: ${getGelombang(s.school)}</td></tr>
+                            <tr><td>Mapel</td><td>: <b>${s.active_exam || '-'}</b></td></tr>
                             <tr><td>Sesi</td><td>: <b>${s.session || '-'}</b></td></tr>
                             <tr><td>Username</td><td>: <b>${s.username}</b></td></tr>
                             <tr><td>Password</td><td>: <b>${s.password || '-'}</b></td></tr>
@@ -242,7 +248,7 @@ const CetakKartuTab = ({ currentUser, students, schedules }: { currentUser: User
                         </div>
                         <div>
                             <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Filter Sekolah</label>
-                            <select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}>
+                            <select className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}>
                                 <option value="all">Semua Sekolah</option>
                                 {uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
@@ -282,7 +288,7 @@ const CetakKartuTab = ({ currentUser, students, schedules }: { currentUser: User
                                         <tbody>
                                             <tr><td className="w-16">Nama</td><td>: <b>{s.fullname}</b></td></tr>
                                             <tr><td>Sekolah</td><td>: {s.school}</td></tr>
-                                            <tr><td>Gelombang</td><td>: {getGelombang(s.school)}</td></tr>
+                                            <tr><td>Mapel</td><td>: <b>{s.active_exam || '-'}</b></td></tr>
                                             <tr><td>Sesi</td><td>: <b>{s.session || '-'}</b></td></tr>
                                             <tr><td>Username</td><td>: <b>{s.username}</b></td></tr>
                                             <tr><td>Password</td><td>: <b>{s.password || '-'}</b></td></tr>

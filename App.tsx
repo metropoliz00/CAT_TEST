@@ -241,7 +241,7 @@ function App() {
                             </div>
                             {/* Responsive Font Size & Styled Text */}
                             <h1 className="text-xl md:text-3xl font-black tracking-tight mb-2">
-                                <span className="text-slate-900">COMPUTER</span> <span className="text-red-600">ASSESMENT</span> <span className="text-blue-600">TEST</span>
+                                <span className="text-slate-900">OLIMPIADE</span> <span className="text-red-600">SAINS</span> <span className="text-blue-600">NASIONAL</span>
                             </h1>
                             <p className="text-slate-500 text-[11px] md:text-sm font-medium">Masuk untuk memulai ujian berbasis komputer.</p>
                         </div>
@@ -277,7 +277,7 @@ function App() {
                         </form>
                         
                         <div className="mt-8 text-center">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest opacity-60">© 2026 CBT System | Secure Exam</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest opacity-60">© 2026 Secure Exam | Dev. By MeyGa</p>
                         </div>
                     </div>
                 </div>
@@ -436,7 +436,7 @@ function App() {
                     <LogOut size={18} /> KELUAR APLIKASI
                 </button>
             </div>
-            <p className="mt-8 text-slate-400 text-xs font-bold tracking-widest uppercase">CBT System © 2026</p>
+            <p className="mt-8 text-slate-400 text-xs font-bold tracking-widest uppercase">© 2026 Secure Exam | Dev. By MeyGa</p>
         </div>
       );
   }

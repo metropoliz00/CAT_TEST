@@ -25,7 +25,7 @@ const AnalisisTab = ({ students }: { students: any[] }) => {
 
     useEffect(() => { 
         api.getExams().then(res => {
-            setExams(res.filter(e => !e.id.startsWith('Survey_')));
+            setExams(res);
         }); 
     }, []);
 
@@ -114,6 +114,17 @@ const AnalisisTab = ({ students }: { students: any[] }) => {
         return { rows, questionStats };
     }, [resultsData, questionsData, filterSchool, filterKecamatan, userMap]);
 
+    const handleSchoolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        setFilterSchool(val);
+        if (val !== 'all') {
+            const sample = students.find(s => s.school === val);
+            if (sample && sample.kecamatan) setFilterKecamatan(sample.kecamatan);
+        } else {
+            setFilterKecamatan('all');
+        }
+    };
+
     const { rows, questionStats } = processedData;
 
     return (
@@ -126,7 +137,7 @@ const AnalisisTab = ({ students }: { students: any[] }) => {
                 
                 <div className="flex flex-col xl:flex-row gap-2 w-full md:w-auto">
                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterKecamatan} onChange={e => setFilterKecamatan(e.target.value)}><option value="all">Semua Kecamatan</option>{uniqueKecamatans.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
-                    <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={e => setFilterSchool(e.target.value)}><option value="all">Semua Sekolah</option>{uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
+                    <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-100" value={filterSchool} onChange={handleSchoolChange}><option value="all">Semua Sekolah</option>{uniqueSchools.map((s:any) => <option key={s} value={s}>{s}</option>)}</select>
                     <select className="p-2 border border-slate-200 rounded-lg text-sm font-bold bg-indigo-50 text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-100 min-w-[200px]" value={selectedExam} onChange={e => setSelectedExam(e.target.value)}><option value="">-- Pilih Ujian --</option>{exams.map(e => <option key={e.id} value={e.id}>{e.nama_ujian}</option>)}</select>
                     
                     {rows.length > 0 && (
