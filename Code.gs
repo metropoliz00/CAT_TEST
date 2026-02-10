@@ -615,32 +615,68 @@ function submitAnswers(username, fullname, school, subject, answers, scoreInfo, 
         targetQuestions = rawQuestions.slice(0, displayedCount);
     }
 
-    let totalScore = 0;
-    let maxPossibleScore = 0;
+    // --- SCORING ENGINE ---
+    // Rumus: (Jumlah Bobot Perolehan / Total Bobot Maksimal) x 100
+    
+    let totalBobotPerolehan = 0;
+    let totalBobotMaksimal = 0;
     const analysisMap = {};
     
     targetQuestions.forEach(q => {
-        const weight = Number(q.bobot) || 10;
-        maxPossibleScore += weight;
+        // Ambil Bobot (Default 10)
+        const bobotSoal = Number(q.bobot) || 10;
+        totalBobotMaksimal += bobotSoal;
         
         const userAns = answers[q.id];
         let isCorrect = 0;
         
+        // 1. Pilihan Ganda
         if (q.tipe_soal === 'PG') {
-            if (String(userAns).toUpperCase() === String(q.kunci_jawaban).toUpperCase()) {
-                totalScore += weight;
+            if (String(userAns).trim().toUpperCase() === String(q.kunci_jawaban).trim().toUpperCase()) {
+                totalBobotPerolehan += bobotSoal;
                 isCorrect = 1;
             }
-        } else if (q.tipe_soal === 'PGK') {
-            const keys = String(q.kunci_jawaban).toUpperCase().split(',').map(s=>s.trim()).sort();
+        } 
+        // 2. Pilihan Ganda Kompleks
+        else if (q.tipe_soal === 'PGK') {
+            const keys = String(q.kunci_jawaban).toUpperCase().split(',').map(s=>s.trim()).filter(k=>k).sort();
             const uVals = Array.isArray(userAns) ? userAns.map(s=>String(s).toUpperCase()).sort() : [];
             if (keys.length === uVals.length && keys.every((v,i) => v === uVals[i])) {
-                totalScore += weight;
+                totalBobotPerolehan += bobotSoal;
                 isCorrect = 1;
             }
-        } else if (q.tipe_soal === 'BS') {
-            if(userAns) {
-                totalScore += weight; 
+        } 
+        // 3. Benar Salah (BS)
+        else if (q.tipe_soal === 'BS') {
+            const keyString = String(q.kunci_jawaban).toUpperCase();
+            const correctKeys = keyString.split(',').map(k => k.trim()); // e.g. ['A', 'C'] if A and C are True
+            
+            // Map frontend IDs (S1..S4) to Key chars (A..D)
+            const mapIdToKey = { 'S1': 'A', 'S2': 'B', 'S3': 'C', 'S4': 'D' };
+            const mapKeyToCol = { 'A': q.opsi_a, 'B': q.opsi_b, 'C': q.opsi_c, 'D': q.opsi_d };
+            
+            let allCorrect = true;
+            let hasAnswer = false;
+            
+            // Iterate over S1..S4
+            ['S1', 'S2', 'S3', 'S4'].forEach(subId => {
+                const keyChar = mapIdToKey[subId];
+                // Only check if the option text exists (is active)
+                if (mapKeyToCol[keyChar]) {
+                    const userBool = (userAns || {})[subId]; // true, false, or undefined
+                    if (userBool !== undefined) hasAnswer = true;
+                    
+                    const isTrueStatement = correctKeys.includes(keyChar);
+                    
+                    // User must match the truth value. 
+                    if (userBool !== isTrueStatement) {
+                        allCorrect = false;
+                    }
+                }
+            });
+
+            if (hasAnswer && allCorrect) {
+                totalBobotPerolehan += bobotSoal;
                 isCorrect = 1;
             }
         }
@@ -648,7 +684,9 @@ function submitAnswers(username, fullname, school, subject, answers, scoreInfo, 
         analysisMap[q.id] = isCorrect;
     });
 
-    const finalScore = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+    // HITUNG FINAL (0 - 100)
+    const finalScore = totalBobotMaksimal > 0 ? (totalBobotPerolehan / totalBobotMaksimal) * 100 : 0;
+    
     const durationSec = Math.floor((now.getTime() - startTime) / 1000);
     const h = Math.floor(durationSec / 3600);
     const m = Math.floor((durationSec % 3600) / 60);
